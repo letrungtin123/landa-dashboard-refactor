@@ -1,6 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getCourses, updateCourse, bulkCourseAction, type LandaCourse } from '@/api/landa-admin';
+import { createCourse } from '@/api/course-authoring';
+import { apiClient } from '@/api/client';
 import { useHeaderInfo } from '@/utils/header-store';
 import { useDebounce } from '@/hooks/use-debounce';
 import { TableToolbar } from '@/components/shared/table-toolbar';
@@ -12,9 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import {
-  BookOpen, Eye, EyeOff, GraduationCap, Globe, ShieldAlert,
+  BookOpen, Eye, EyeOff, GraduationCap, Globe, ShieldAlert, Edit2, Plus, ImagePlus, Loader2, LayoutTemplate, ArrowRight
 } from 'lucide-react';
 
 export default function CoursesPage() {
@@ -27,6 +31,82 @@ export default function CoursesPage() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [selected, setSelected] = useState<string[]>([]);
+  const [previewCourse, setPreviewCourse] = useState<LandaCourse | null>(null);
+
+  // --- Tạo course mới ---
+  const [showCreate, setShowCreate] = useState(false);
+  const [newOrg, setNewOrg] = useState('LAndA2');
+  const [newNumber, setNewNumber] = useState('');
+  const [newRun, setNewRun] = useState(String(new Date().getFullYear()));
+  const [newName, setNewName] = useState('');
+
+  const createMut = useMutation({
+    mutationFn: () => createCourse({
+      org: newOrg,
+      number: newNumber,
+      run: newRun,
+      display_name: newName,
+      start: '2020-01-01T00:00:00Z',
+    }),
+    onSuccess: (data) => {
+      toast.success(`Đã tạo course: ${data.display_name}`);
+      setShowCreate(false);
+      setNewNumber(''); setNewName('');
+      queryClient.invalidateQueries({ queryKey: ['landa-courses'] });
+    },
+    onError: (err: any) => {
+      toast.error('Tạo thất bại: ' + (err?.response?.data?.error || err.message));
+    },
+  });
+
+  // --- Upload Course Image ---
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingCourseId, setUploadingCourseId] = useState<string | null>(null);
+
+  const handleUploadCourseImage = async (courseId: string, file: File) => {
+    setUploadingCourseId(courseId);
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      // 1. Upload to Assets API
+      const { data } = await apiClient.post(`/cms-api/landa-admin/api/authoring/assets/${courseId}/`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      
+      const display_name = data?.asset?.display_name || data?.display_name || file.name;
+      if (!display_name) throw new Error("Không nhận được tên file từ server");
+
+      // 2. Update Course Metadata
+      const usageKey = courseId.replace('course-v1:', 'block-v1:') + '+type@course+block@course';
+      await apiClient.post(`/cms-api/landa-admin/api/authoring/xblock/${usageKey}`, {
+        metadata: { course_image: display_name }
+      });
+      
+      toast.success('Đã cập nhật ảnh đại diện khóa học!');
+      queryClient.invalidateQueries({ queryKey: ['landa-courses'] });
+    } catch (err: any) {
+      toast.error('Cập nhật ảnh thất bại: ' + (err?.response?.data?.error || err.message));
+    } finally {
+      setUploadingCourseId(null);
+    }
+  };
+
+  const onFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const courseId = fileInputRef.current?.getAttribute('data-course-id');
+    if (!file || !courseId) return;
+    
+    handleUploadCourseImage(courseId, file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const triggerUpload = (courseId: string) => {
+    if (fileInputRef.current) {
+      fileInputRef.current.setAttribute('data-course-id', courseId);
+      fileInputRef.current.click();
+    }
+  };
 
   useEffect(() => { setPage(1); }, [debouncedSearch, visFilter]);
 
@@ -74,6 +154,94 @@ export default function CoursesPage() {
 
   return (
     <div className="p-6 space-y-4 max-w-7xl mx-auto pb-10">
+
+      {/* Dialog tạo course */}
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-xl">Tạo Khóa Học Mới</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Tên khóa học</label>
+              <input className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newName} onChange={e => setNewName(e.target.value)} placeholder="Ví dụ: Văn hóa doanh nghiệp L&A" />
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Org</label>
+                <input className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newOrg} onChange={e => setNewOrg(e.target.value)} placeholder="LAndA2" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Course Number</label>
+                <input className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newNumber} onChange={e => setNewNumber(e.target.value)} placeholder="000010" />
+              </div>
+              <div className="space-y-1">
+                <label className="text-sm font-medium">Run (năm)</label>
+                <input className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={newRun} onChange={e => setNewRun(e.target.value)} placeholder="2026" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Course ID sẽ là: <span className="font-mono font-semibold">course-v1:{newOrg}+{newNumber}+{newRun}</span></p>
+            <p className="text-xs text-muted-foreground bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-2 rounded-md">💡 Start date được đặt là 01/01/2020 để course tự động publish và hiển thị cho học viên.</p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Hủy</Button>
+            <Button onClick={() => createMut.mutate()} disabled={createMut.isPending || !newName || !newNumber || !newOrg || !newRun}>
+              {createMut.isPending ? 'Đang tạo...' : 'Tạo Course'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog Preview Card */}
+      <Dialog open={!!previewCourse} onOpenChange={(o) => !o && setPreviewCourse(null)}>
+        <DialogContent className="sm:max-w-[400px] p-0 overflow-hidden border-border bg-background gap-0 rounded-2xl">
+          <div className="relative h-48 bg-[#3b82f6] flex items-center justify-center">
+            {previewCourse?.image_url && !previewCourse.image_url.includes('images/course_image') && !previewCourse.image_url.includes('images_course_image') ? (
+              <img src={previewCourse.image_url} alt="course" className="w-full h-full object-cover" />
+            ) : (
+              <BookOpen className="w-20 h-20 text-white/50" strokeWidth={1.5} />
+            )}
+          </div>
+          <div className="p-6 space-y-5">
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="bg-emerald-50 text-emerald-600 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20 font-medium px-2.5 py-0.5 rounded-full text-xs">Đang học</Badge>
+              <Badge variant="outline" className="font-medium text-foreground bg-background rounded-full px-2.5 py-0.5 text-xs shadow-sm">Có hướng dẫn</Badge>
+            </div>
+            
+            <div className="space-y-1">
+              <h3 className="text-[22px] font-bold text-[#1a66ff] dark:text-[#3b82f6] leading-snug">
+                {previewCourse?.display_name || "L&A System 4"}
+              </h3>
+              <p className="text-sm text-muted-foreground">{previewCourse?.org || "LAndA"}</p>
+            </div>
+
+            <div className="pt-3">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-sm text-muted-foreground">Tiến độ</span>
+                <span className="text-sm font-bold text-[#1a66ff] dark:text-[#3b82f6]">50%</span>
+              </div>
+              <div className="h-1.5 w-full bg-muted rounded-full overflow-hidden">
+                <div className="h-full bg-[#1a66ff] dark:bg-[#3b82f6] rounded-full" style={{ width: '50%' }} />
+              </div>
+            </div>
+
+            <div className="pt-1">
+              <Button variant="link" className="px-0 text-[#1a66ff] dark:text-[#3b82f6] font-semibold gap-1.5 h-auto text-[15px] hover:no-underline hover:opacity-80">
+                Tiếp tục học <ArrowRight className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <input 
+        type="file" 
+        accept="image/*" 
+        className="hidden" 
+        ref={fileInputRef} 
+        onChange={onFileChange} 
+      />
+
       <TableToolbar
         search={search}
         onSearchChange={setSearch}
@@ -94,16 +262,21 @@ export default function CoursesPage() {
         }}
         onReset={() => { setSearch(''); setVisFilter('all'); }}
         actions={
-          selected.length > 0 ? (
-            <div className="flex items-center gap-2">
-              <Button size="sm" variant="outline" onClick={() => bulkMut.mutate({ action: 'public' })} className="h-8 text-xs">
-                <Globe className="mr-1 h-3.5 w-3.5" /> Công khai ({selected.length})
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => bulkMut.mutate({ action: 'staff_only' })} className="h-8 text-xs">
-                <ShieldAlert className="mr-1 h-3.5 w-3.5" /> Chỉ Staff ({selected.length})
-              </Button>
-            </div>
-          ) : undefined
+          <div className="flex items-center gap-2">
+            {selected.length > 0 && (
+              <>
+                <Button size="sm" variant="outline" onClick={() => bulkMut.mutate({ action: 'public' })} className="h-8 text-xs">
+                  <Globe className="mr-1 h-3.5 w-3.5" /> Công khai ({selected.length})
+                </Button>
+                <Button size="sm" variant="outline" onClick={() => bulkMut.mutate({ action: 'staff_only' })} className="h-8 text-xs">
+                  <ShieldAlert className="mr-1 h-3.5 w-3.5" /> Chỉ Staff ({selected.length})
+                </Button>
+              </>
+            )}
+            <Button size="sm" onClick={() => setShowCreate(true)} className="h-8 text-xs gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> Tạo Course
+            </Button>
+          </div>
         }
       />
 
@@ -179,7 +352,22 @@ export default function CoursesPage() {
                     <TableCell className="text-muted-foreground text-sm">{course.start}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{course.end}</TableCell>
                     <TableCell className="text-muted-foreground text-sm">{course.modified}</TableCell>
-                    <TableCell className="text-right pr-5">
+                    <TableCell className="text-right pr-5 flex justify-end gap-1">
+                      <Button variant="ghost" size="icon"
+                        onClick={() => setPreviewCourse(course)}
+                        className="h-8 w-8 text-sky-600 hover:text-sky-700 hover:bg-sky-50 dark:text-sky-400 dark:hover:bg-sky-950/30"
+                        title="Xem preview Card"
+                      >
+                        <LayoutTemplate className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon"
+                        onClick={() => triggerUpload(course.id)}
+                        disabled={uploadingCourseId === course.id}
+                        className="h-8 w-8 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950/30"
+                        title="Đổi ảnh đại diện"
+                      >
+                        {uploadingCourseId === course.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ImagePlus className="h-3.5 w-3.5" />}
+                      </Button>
                       <Button variant="ghost" size="icon"
                         onClick={() => toggleVis.mutate({ id: course.id, visible: !course.visible_to_staff_only })}
                         className="h-8 w-8 text-muted-foreground hover:text-foreground"
@@ -187,6 +375,11 @@ export default function CoursesPage() {
                       >
                         {course.visible_to_staff_only ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
                       </Button>
+                      <Link to={`/courses/${course.id}/edit`}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10" title="Chỉnh sửa (Studio)">
+                          <Edit2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </Link>
                     </TableCell>
                   </TableRow>
                 ))

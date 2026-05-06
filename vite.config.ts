@@ -23,6 +23,13 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           cookieDomainRewrite: 'localhost',
         },
+        // Forward API calls đến CMS (Studio)
+        '/cms-api': {
+          target: env.VITE_OPENEDX_CMS_URL || 'http://studio.local.openedx.io',
+          changeOrigin: true,
+          cookieDomainRewrite: 'localhost',
+          rewrite: (path) => path.replace(/^\/cms-api/, ''),
+        },
         '/api': {
           target: lmsUrl,
           changeOrigin: true,
@@ -37,6 +44,23 @@ export default defineConfig(({ mode }) => {
           target: lmsUrl,
           changeOrigin: true,
           cookieDomainRewrite: 'localhost',
+        },
+        // Forward hình ảnh và static files của Open edX
+        '/asset-v1:': {
+          target: lmsUrl,
+          changeOrigin: true,
+        },
+        '/c4x/': {
+          target: lmsUrl,
+          changeOrigin: true,
+        },
+        '/static': {
+          target: lmsUrl,
+          changeOrigin: true,
+        },
+        '/media': {
+          target: lmsUrl,
+          changeOrigin: true,
         },
       },
     },

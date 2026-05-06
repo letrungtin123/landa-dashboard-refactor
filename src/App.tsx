@@ -25,6 +25,7 @@ import AuditLogsPage from '@/pages/audit-logs';
 import ReportSummaryPage from '@/pages/report-summary';
 import LibraryPage from '@/pages/library';
 import CoursesPage from '@/pages/courses';
+import CourseEditorPage from '@/pages/course-editor';
 
 function AppRoutes() {
   return (
@@ -46,6 +47,7 @@ function AppRoutes() {
           <Route path="/report-summary" element={<ReportSummaryPage />} />
           <Route path="/library" element={<LibraryPage />} />
           <Route path="/courses" element={<CoursesPage />} />
+          <Route path="/courses/:courseId/edit" element={<CourseEditorPage />} />
 
           {/* Legacy redirects */}
           <Route path="/user" element={<Navigate to="/accounts" replace />} />

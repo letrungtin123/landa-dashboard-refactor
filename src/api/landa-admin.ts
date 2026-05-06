@@ -38,6 +38,7 @@ export interface LandaCourse {
   end: string;
   created: string;
   modified: string;
+  image_url?: string;
 }
 
 interface PaginatedResponse<T> {
