@@ -34,12 +34,14 @@ export default function CustomShapeNode({ data, selected }: NodeProps) {
         borderRadius,
       }}
     >
-      <Handle type="target" position={Position.Top} className="w-2 h-2 !bg-muted-foreground" />
+      <Handle type="target" position={Position.Top} id="top" className="w-2 h-2 !bg-muted-foreground" />
+      <Handle type="target" position={Position.Left} id="left" className="w-2 h-2 !bg-muted-foreground" />
       <div className="text-sm font-semibold text-center whitespace-pre-wrap flex items-center gap-1">
         {label || 'Trống'}
         {target_diagram_id && <Link className="w-3 h-3 opacity-50" />}
       </div>
-      <Handle type="source" position={Position.Bottom} className="w-2 h-2 !bg-muted-foreground" />
+      <Handle type="source" position={Position.Bottom} id="bottom" className="w-2 h-2 !bg-muted-foreground" />
+      <Handle type="source" position={Position.Right} id="right" className="w-2 h-2 !bg-muted-foreground" />
     </div>
   );
 

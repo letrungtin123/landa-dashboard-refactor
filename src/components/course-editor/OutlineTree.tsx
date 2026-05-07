@@ -22,6 +22,10 @@ import { toast } from 'sonner';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface OutlineTreeProps {
   courseId: string;
@@ -313,6 +317,8 @@ function NodeActions({ node, onRename, onStructureChange }: {
   onRename: () => void;
   onStructureChange: () => void;
 }) {
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   const delMut = useMutation({
     mutationFn: () => deleteBlock(node.id),
     onSuccess: () => { toast.success('Đã xóa'); onStructureChange(); },
@@ -326,31 +332,51 @@ function NodeActions({ node, onRename, onStructureChange }: {
   });
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-6 w-6">
-          <MoreVertical className="h-3.5 w-3.5" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-40">
-        <DropdownMenuItem onClick={onRename}>
-          <Pencil className="h-3.5 w-3.5 mr-2" /> Đổi tên
-        </DropdownMenuItem>
-        {(!node.published || node.has_changes) && (
-          <DropdownMenuItem onClick={() => publishMut.mutate()}>
-            <Globe className="h-3.5 w-3.5 mr-2" /> Publish
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" className="h-6 w-6">
+            <MoreVertical className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-40">
+          <DropdownMenuItem onClick={onRename}>
+            <Pencil className="h-3.5 w-3.5 mr-2" /> Đổi tên
           </DropdownMenuItem>
-        )}
-        <DropdownMenuItem
-          className="text-destructive focus:text-destructive"
-          onClick={() => {
-            if (confirm(`Xóa "${node.display_name}"?`)) delMut.mutate();
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5 mr-2" /> Xóa
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {(!node.published || node.has_changes) && (
+            <DropdownMenuItem onClick={() => publishMut.mutate()}>
+              <Globe className="h-3.5 w-3.5 mr-2" /> Publish
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuItem
+            className="text-destructive focus:text-destructive"
+            onClick={() => setShowDeleteDialog(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-2" /> Xóa
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Xác nhận xóa</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bạn có chắc muốn xóa <span className="font-semibold text-foreground">"{node.display_name}"</span>? Hành động này không thể hoàn tác.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Hủy</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => delMut.mutate()}
+            >
+              Xóa
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }
 

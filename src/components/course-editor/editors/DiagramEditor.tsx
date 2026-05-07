@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Settings, Trash2, ArrowLeft, Type, Palette, Hexagon, Circle, Square, CornerDownRight, Link as LinkIcon, Undo2, Redo2, Save } from 'lucide-react';
+import { Plus, Settings, Trash2, ArrowLeft, Type, Palette, Hexagon, Circle, Square, CornerDownRight, Link as LinkIcon, Undo2, Redo2, Save, Copy } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -171,6 +171,22 @@ export default function DiagramEditor({
     onDiagramDataChange(newData);
     takeSnapshot(newData);
     setSelectedNode(null);
+  };
+
+  const duplicateSelectedNode = () => {
+    if (!selectedNode) return;
+    const newNode: Node<DiagramNodeData> = {
+      id: uuidv4(),
+      type: 'customShape',
+      position: { x: selectedNode.position.x + 40, y: selectedNode.position.y + 40 },
+      data: { ...selectedNode.data },
+    };
+    const newDiagrams = [...diagrams];
+    newDiagrams[activeDiagramIndex] = { ...activeDiagram, nodes: [...activeDiagram.nodes, newNode] };
+    const newData = { ...diagramData, diagrams: newDiagrams };
+    onDiagramDataChange(newData);
+    takeSnapshot(newData);
+    setSelectedNode(newNode);
   };
 
   const addNewDiagram = () => {
@@ -429,7 +445,10 @@ export default function DiagramEditor({
                 </Select>
               </div>
             </div>
-            <div className="p-4 border-t border-border bg-muted/10">
+            <div className="p-4 border-t border-border bg-muted/10 space-y-2">
+              <Button variant="outline" className="w-full gap-2 shadow-sm" onClick={duplicateSelectedNode}>
+                <Copy className="w-4 h-4" /> Nhân bản Shape
+              </Button>
               <Button variant="destructive" className="w-full gap-2 shadow-sm" onClick={deleteSelectedNode}>
                 <Trash2 className="w-4 h-4" /> Xóa Shape
               </Button>
