@@ -60,6 +60,8 @@ export interface ReportSummaryResponse {
     total_staff: number;
     active_learners: number;
     total_courses: number;
+    completion_rate: number;
+    total_enrollments: number;
   };
   lists: {
     uncompleted_trend: Array<{
@@ -72,7 +74,8 @@ export interface ReportSummaryResponse {
 export interface ReportChartResponse {
   year: number;
   metric: string;
-  data: Array<{ month: string; value: number }>;
+  is_grouped?: boolean;
+  data: Array<any>;
 }
 
 export interface ReportTopCourse {
@@ -84,7 +87,10 @@ export interface ReportTopCourse {
 export interface ReportUncompletedLearner {
   username: string;
   email: string;
-  enrolled_at: string | null;
+  last_completion_at: string | null;
+  progress: number;
+  course_name: string;
+  is_stalled: boolean;
 }
 
 export interface ReportPaginatedResponse<T> {
@@ -222,6 +228,41 @@ export async function bulkCourseAction(ids: string[], action: 'staff_only' | 'pu
   const { data } = await apiClient.post(`${BASE}/courses-bulk/`, { ids, action });
   return data;
 }
+
+// ── Course Modal Config ──
+
+export interface CourseModalConfig {
+  course_id: string;
+  confirm_enabled: boolean;
+  confirm_title: string;
+  confirm_description: string;
+  confirm_checkbox_text: string;
+  completion_enabled: boolean;
+  completion_title: string;
+  completion_description: string;
+  updated_at: string | null;
+}
+
+export async function getCourseModalConfig(courseId: string): Promise<CourseModalConfig> {
+  const { data } = await apiClient.get(`${BASE}/courses/${courseId}/modal-config/`);
+  return data;
+}
+
+export async function updateCourseModalConfig(courseId: string, config: Partial<CourseModalConfig>): Promise<{ success: boolean }> {
+  const { data } = await apiClient.put(`${BASE}/courses/${courseId}/modal-config/`, config);
+  return data;
+}
+
+// ── Course Notification ──
+
+export async function sendCourseNotification(courseId: string, payload: {
+  title: string;
+  message: string;
+}): Promise<{ success: boolean; recipients: number }> {
+  const { data } = await apiClient.post(`${BASE}/courses/${courseId}/send-notification/`, payload);
+  return data;
+}
+
 // ══════════════════════════════════════════════
 // Report Summary API
 // ══════════════════════════════════════════════
@@ -248,22 +289,24 @@ export const getLearnerDetail = async (username: string, page = 1, search = ''):
   return response.data;
 };
 
-export async function getReportSummary(params?: { month?: number; year?: number }): Promise<ReportSummaryResponse> {
+export async function getReportSummary(params?: { month?: number; year?: number; group_id?: number | string }): Promise<ReportSummaryResponse> {
   const { data } = await apiClient.get<ReportSummaryResponse>(`${BASE}/report-summary/`, { params });
   return data;
 }
 
-export async function getReportChart(year: number, metric: string): Promise<ReportChartResponse> {
-  const { data } = await apiClient.get<ReportChartResponse>(`${BASE}/report-chart/`, { params: { year, metric } });
+export async function getReportChart(year: number, metric: string, group_id?: number | string): Promise<ReportChartResponse> {
+  const params: any = { year, metric };
+  if (group_id) params.group_id = group_id;
+  const { data } = await apiClient.get<ReportChartResponse>(`${BASE}/report-chart/`, { params });
   return data;
 }
 
-export async function getReportTopCourses(params?: { page?: number; page_size?: number; month?: number; year?: number }): Promise<ReportPaginatedResponse<ReportTopCourse>> {
+export async function getReportTopCourses(params?: { page?: number; page_size?: number; month?: number; year?: number; group_id?: number | string }): Promise<ReportPaginatedResponse<ReportTopCourse>> {
   const { data } = await apiClient.get<ReportPaginatedResponse<ReportTopCourse>>(`${BASE}/report-top-courses/`, { params });
   return data;
 }
 
-export async function getReportUncompletedLearners(params?: { page?: number; page_size?: number; search?: string; month?: number; year?: number }): Promise<ReportPaginatedResponse<ReportUncompletedLearner>> {
+export async function getReportUncompletedLearners(params?: { page?: number; page_size?: number; search?: string; month?: number; year?: number; group_id?: number | string; status?: 'all' | 'stalled' | 'learning' }): Promise<ReportPaginatedResponse<ReportUncompletedLearner>> {
   const { data } = await apiClient.get<ReportPaginatedResponse<ReportUncompletedLearner>>(`${BASE}/report-uncompleted-learners/`, { params });
   return data;
 }

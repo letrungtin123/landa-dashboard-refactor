@@ -8,7 +8,7 @@ import RichTextEditor from '../RichTextEditor';
 const PROBLEM_TYPES = [
   {
     id: 'multiplechoiceresponse',
-    label: 'Single select',
+    label: 'Trắc nghiệm 1 đáp án',
     desc: 'Chọn một đáp án đúng',
     boilerplate: 'multiplechoice',
     template: `<problem>
@@ -24,7 +24,7 @@ const PROBLEM_TYPES = [
   },
   {
     id: 'choiceresponse',
-    label: 'Multi-select',
+    label: 'Trắc nghiệm nhiều đáp án',
     desc: 'Chọn nhiều đáp án đúng',
     boilerplate: 'choiceresponse',
     template: `<problem>
@@ -40,7 +40,7 @@ const PROBLEM_TYPES = [
   },
   {
     id: 'optionresponse',
-    label: 'Dropdown',
+    label: 'Danh sách thả xuống',
     desc: 'Chọn từ danh sách thả xuống',
     boilerplate: 'dropdown',
     template: `<problem>
@@ -56,7 +56,7 @@ const PROBLEM_TYPES = [
   },
   {
     id: 'numericalresponse',
-    label: 'Numerical input',
+    label: 'Điền số',
     desc: 'Nhập số (có sai số)',
     boilerplate: 'numericalresponse',
     template: `<problem>
@@ -69,7 +69,7 @@ const PROBLEM_TYPES = [
   },
   {
     id: 'stringresponse',
-    label: 'Text input',
+    label: 'Điền văn bản',
     desc: 'Nhập văn bản tự do',
     boilerplate: 'stringresponse',
     template: `<problem>
@@ -389,7 +389,7 @@ export default function ProblemEditor({
           <div className="flex-1 space-y-8">
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-bold">Question</h3>
+                <h3 className="text-sm font-bold">Câu hỏi</h3>
               </div>
               <RichTextEditor 
                 content={state.questionHtml} 
@@ -400,8 +400,8 @@ export default function ProblemEditor({
 
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-bold">Explanation</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Provide an explanation for the correct answer</p>
+                <h3 className="text-sm font-bold">Giải thích (Đáp án)</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">Cung cấp lời giải chi tiết sau khi học viên trả lời</p>
               </div>
               <RichTextEditor 
                 content={state.explanationHtml} 
@@ -412,18 +412,18 @@ export default function ProblemEditor({
 
             <div className="space-y-3">
               <div>
-                <h3 className="text-sm font-bold">Answers</h3>
+                <h3 className="text-sm font-bold">Danh sách đáp án</h3>
                 {state.type === 'numericalresponse' || state.type === 'stringresponse' ? (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Enter correct {state.type === 'numericalresponse' ? 'numerical' : 'text'} answers below. Learners must match one.
+                    Nhập (các) đáp án đúng bên dưới. Học viên phải nhập khớp một trong số các đáp án này.
                   </p>
                 ) : state.type === 'optionresponse' ? (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Enter your dropdown answers below and select which choice is correct. Learners must select one correct answer.
+                    Nhập các tùy chọn bên dưới và đánh dấu vào đáp án đúng.
                   </p>
                 ) : (
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Enter your {state.type === 'multiplechoiceresponse' ? 'single select' : 'multi-select'} answers below and select which choices are correct.
+                    Nhập các đáp án bên dưới và đánh dấu vào {state.type === 'multiplechoiceresponse' ? 'đáp án đúng' : 'các đáp án đúng'}.
                   </p>
                 )}
               </div>
@@ -446,7 +446,7 @@ export default function ProblemEditor({
                           className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-[15px] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0"
                           value={choice.html}
                           onChange={(e) => handleUpdateChoice(choice.id, { html: e.target.value })}
-                          placeholder={state.type === 'numericalresponse' ? 'Enter correct numerical answer (e.g. 100)' : 'Enter correct string answer'}
+                          placeholder={state.type === 'numericalresponse' ? 'Nhập số (VD: 100)' : 'Nhập văn bản đáp án đúng'}
                         />
                       </div>
                       <div className="pt-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -481,7 +481,7 @@ export default function ProblemEditor({
                           className="w-full flex min-h-[60px] rounded-md border border-input bg-background px-3 py-2 text-[15px] ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 resize-y"
                           value={choice.html}
                           onChange={(e) => handleUpdateChoice(choice.id, { html: e.target.value })}
-                          placeholder="Enter option..."
+                          placeholder="Nhập tùy chọn thả xuống..."
                         />
                       </div>
                       <div className="pt-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
@@ -534,22 +534,21 @@ export default function ProblemEditor({
                 
                 <div className="pt-2">
                   <Button variant="ghost" className="text-sm font-semibold pl-2 hover:bg-primary/5 hover:text-primary" onClick={handleAddChoice}>
-                    <Plus className="w-4 h-4 mr-2" /> {state.type === 'numericalresponse' || state.type === 'stringresponse' ? 'Add answer' : 'Add choice'}
+                    <Plus className="w-4 h-4 mr-2" /> {state.type === 'numericalresponse' || state.type === 'stringresponse' ? 'Thêm đáp án' : 'Thêm lựa chọn'}
                   </Button>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Right Column */}
           <div className="w-full lg:w-72 shrink-0 space-y-6">
             <div className="border border-border rounded-xl p-4 bg-muted/10 space-y-3">
-              <label className="text-sm font-semibold text-primary">Scoring</label>
-              <div className="text-sm font-medium">1 points <span className="text-muted-foreground font-normal">· Unlimited attempts</span></div>
+              <label className="text-sm font-semibold text-primary">Điểm số</label>
+              <div className="text-sm font-medium">1 điểm <span className="text-muted-foreground font-normal">· Không giới hạn lần thử</span></div>
             </div>
 
             <div className="border border-border rounded-xl p-4 bg-muted/10 space-y-3">
-              <label className="text-sm font-semibold text-primary">Hints</label>
+              <label className="text-sm font-semibold text-primary">Gợi ý</label>
               <div className="space-y-2">
                 {state.hints.map((hint, i) => (
                   <div key={i} className="flex gap-2 items-center">
@@ -565,7 +564,7 @@ export default function ProblemEditor({
                 ))}
               </div>
               <Button variant="ghost" className="w-full text-sm font-semibold hover:bg-primary/5 hover:text-primary mt-1" onClick={handleAddHint}>
-                <Plus className="w-4 h-4 mr-2" /> Add hint
+                <Plus className="w-4 h-4 mr-2" /> Thêm gợi ý
               </Button>
             </div>
           </div>

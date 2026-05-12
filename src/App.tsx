@@ -27,6 +27,7 @@ import LibraryPage from '@/pages/library';
 import CoursesPage from '@/pages/courses';
 import CourseEditorPage from '@/pages/course-editor';
 import GroupsPage from '@/pages/groups';
+import HelpDocsPage from '@/pages/help-docs';
 
 function AppRoutes() {
   return (
@@ -50,6 +51,7 @@ function AppRoutes() {
           <Route path="/courses" element={<CoursesPage />} />
           <Route path="/courses/:courseId/edit" element={<CourseEditorPage />} />
           <Route path="/groups" element={<GroupsPage />} />
+          <Route path="/help-docs" element={<HelpDocsPage />} />
 
           {/* Legacy redirects */}
           <Route path="/user" element={<Navigate to="/accounts" replace />} />

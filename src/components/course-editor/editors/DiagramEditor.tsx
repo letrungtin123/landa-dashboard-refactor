@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   ReactFlow,
   MiniMap,
@@ -15,10 +15,14 @@ import {
   NodeChange,
   EdgeChange,
   ControlButton,
+  BaseEdge,
+  getBezierPath,
+  EdgeLabelRenderer,
+  type EdgeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { v4 as uuidv4 } from 'uuid';
-import { Plus, Settings, Trash2, ArrowLeft, Type, Palette, Hexagon, Circle, Square, CornerDownRight, Link as LinkIcon, Undo2, Redo2, Save, Copy } from 'lucide-react';
+import { Plus, Settings, Trash2, ArrowLeft, Type, Palette, Hexagon, Circle, Square, CornerDownRight, Link as LinkIcon, Undo2, Redo2, Save, Copy, X } from 'lucide-react';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
@@ -30,6 +34,50 @@ import { useDiagramHistory } from './diagram/useDiagramHistory';
 
 const nodeTypes = {
   customShape: CustomShapeNode,
+};
+
+// Custom edge: hiện nút X ngay giữa đường nối trên canvas
+function DeletableEdge({
+  id, sourceX, sourceY, targetX, targetY,
+  sourcePosition, targetPosition, style, markerEnd, data,
+}: EdgeProps) {
+  const [edgePath, labelX, labelY] = getBezierPath({
+    sourceX, sourceY, sourcePosition,
+    targetX, targetY, targetPosition,
+  });
+
+  const onDelete = (data as any)?.onDelete;
+  const isSelected = (data as any)?.isSelected;
+
+  return (
+    <>
+      <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
+      {isSelected && onDelete && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: 'absolute',
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: 'all',
+            }}
+            className="nodrag nopan"
+          >
+            <button
+              onClick={(e) => { e.stopPropagation(); onDelete(id); }}
+              className="flex items-center justify-center w-5 h-5 rounded-full bg-destructive text-white shadow-lg hover:scale-110 transition-transform cursor-pointer"
+              title="Xóa đường nối"
+            >
+              <X className="w-3 h-3" />
+            </button>
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
+}
+
+const edgeTypes = {
+  deletable: DeletableEdge,
 };
 
 export interface Diagram {
@@ -82,6 +130,7 @@ export default function DiagramEditor({
   const activeDiagram = diagrams[activeDiagramIndex];
 
   const [selectedNode, setSelectedNode] = useState<Node<DiagramNodeData> | null>(null);
+  const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
@@ -95,7 +144,11 @@ export default function DiagramEditor({
 
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) => {
-      const newEdges = applyEdgeChanges(changes, activeDiagram.edges);
+      // Chỉ lọc bỏ remove changes từ phím Delete — ta xử lý xóa edge qua nút X riêng
+      // Giữ lại select changes để ReactFlow internal state đồng bộ, tránh edge biến mất
+      const filtered = changes.filter(c => c.type !== 'remove');
+      if (filtered.length === 0) return;
+      const newEdges = applyEdgeChanges(filtered, activeDiagram.edges);
       const newDiagrams = [...diagrams];
       newDiagrams[activeDiagramIndex] = { ...activeDiagram, edges: newEdges };
       onDiagramDataChange({ ...diagramData, diagrams: newDiagrams });
@@ -142,7 +195,45 @@ export default function DiagramEditor({
 
   const handleNodeClick = (event: React.MouseEvent, node: Node) => {
     setSelectedNode(node as Node<DiagramNodeData>);
+    setSelectedEdgeId(null);
   };
+
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      setSelectedEdgeId(edge.id);
+      setSelectedNode(null);
+    },
+    []
+  );
+
+  const deleteEdgeById = useCallback((edgeId: string) => {
+    const newEdges = activeDiagram.edges.filter(e => e.id !== edgeId);
+    const newDiagrams = [...diagrams];
+    newDiagrams[activeDiagramIndex] = { ...activeDiagram, edges: newEdges };
+    const newData = { ...diagramData, diagrams: newDiagrams };
+    onDiagramDataChange(newData);
+    takeSnapshot(newData);
+    setSelectedEdgeId(null);
+  }, [activeDiagram, activeDiagramIndex, diagrams, diagramData, onDiagramDataChange, takeSnapshot]);
+
+  // Gắn type='deletable' + trạng thái isSelected vào mỗi edge qua data
+  const styledEdges = useMemo(() => {
+    return activeDiagram.edges.map(e => {
+      const isSelected = e.id === selectedEdgeId;
+      return {
+        ...e,
+        type: 'deletable',
+        selected: isSelected,
+        style: {
+          ...e.style,
+          stroke: isSelected ? 'var(--destructive)' : undefined,
+          strokeWidth: isSelected ? 3 : 2,
+        },
+        animated: isSelected,
+        data: { ...((e as any).data || {}), onDelete: deleteEdgeById, isSelected },
+      };
+    });
+  }, [activeDiagram.edges, selectedEdgeId, deleteEdgeById]);
 
   const updateSelectedNode = (data: Partial<DiagramNodeData>) => {
     if (!selectedNode) return;
@@ -314,14 +405,16 @@ export default function DiagramEditor({
             <ReactFlow
               colorMode={theme === 'dark' ? 'dark' : 'light'}
               nodes={activeDiagram.nodes}
-              edges={activeDiagram.edges}
+              edges={styledEdges}
               onNodesChange={onNodesChange}
               onNodeDragStop={onNodeDragStop}
               onEdgesChange={onEdgesChange}
               onConnect={onConnect}
               onNodeClick={handleNodeClick}
-              onPaneClick={() => setSelectedNode(null)}
+              onEdgeClick={handleEdgeClick}
+              onPaneClick={() => { setSelectedNode(null); setSelectedEdgeId(null); }}
               nodeTypes={nodeTypes}
+              edgeTypes={edgeTypes}
               fitView
               deleteKeyCode="Delete"
             >

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getCourses, updateCourse, bulkCourseAction, type LandaCourse } from '@/api/landa-admin';
+import { getCourses, updateCourse, bulkCourseAction, getCourseModalConfig, updateCourseModalConfig, sendCourseNotification, type LandaCourse, type CourseModalConfig } from '@/api/landa-admin';
 import { createCourse } from '@/api/course-authoring';
 import { apiClient } from '@/api/client';
 import { useHeaderInfo } from '@/utils/header-store';
@@ -19,9 +19,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import {
-  BookOpen, GraduationCap, Globe, Edit2, Plus, ImagePlus, Loader2, LayoutTemplate, ArrowRight, FolderOpen, Archive, ArchiveRestore
+  BookOpen, GraduationCap, Globe, Edit2, Plus, ImagePlus, Loader2, LayoutTemplate, ArrowRight, FolderOpen, Archive, ArchiveRestore, Settings2, Bell
 } from 'lucide-react';
 import { CourseFilesModal } from '@/components/course-editor/CourseFilesModal';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export default function CoursesPage() {
   useHeaderInfo('Courses');
@@ -35,6 +37,8 @@ export default function CoursesPage() {
   const [selected, setSelected] = useState<string[]>([]);
   const [previewCourse, setPreviewCourse] = useState<LandaCourse | null>(null);
   const [selectedCourseFiles, setSelectedCourseFiles] = useState<string | null>(null);
+  const [modalConfigCourseId, setModalConfigCourseId] = useState<string | null>(null);
+  const [notifyCourseId, setNotifyCourseId] = useState<string | null>(null);
 
   // --- Tạo course mới ---
   const [showCreate, setShowCreate] = useState(false);
@@ -408,6 +412,30 @@ export default function CoursesPage() {
 
                       <Tooltip>
                         <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon"
+                            onClick={() => setNotifyCourseId(course.id)}
+                            className="h-8 w-8 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                          >
+                            <Bell className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Gửi thông báo</TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon"
+                            onClick={() => setModalConfigCourseId(course.id)}
+                            className="h-8 w-8 text-violet-600 hover:text-violet-700 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/30"
+                          >
+                            <Settings2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Cấu hình Modal</TooltipContent>
+                      </Tooltip>
+
+                      <Tooltip>
+                        <TooltipTrigger asChild>
                           <Link to={`/courses/${course.id}/edit`}>
                             <Button variant="ghost" size="icon" className="h-8 w-8 text-primary hover:text-primary hover:bg-primary/10">
                               <Edit2 className="h-3.5 w-3.5" />
@@ -433,6 +461,226 @@ export default function CoursesPage() {
         onClose={() => setSelectedCourseFiles(null)} 
         courseId={selectedCourseFiles || ''} 
       />
+
+      {/* Dialog cấu hình Modal */}
+      {modalConfigCourseId && (
+        <CourseModalConfigDialog
+          courseId={modalConfigCourseId}
+          open={!!modalConfigCourseId}
+          onClose={() => setModalConfigCourseId(null)}
+        />
+      )}
+
+      {/* Dialog gửi thông báo */}
+      {notifyCourseId && (
+        <SendNotificationDialog
+          courseId={notifyCourseId}
+          open={!!notifyCourseId}
+          onClose={() => setNotifyCourseId(null)}
+        />
+      )}
     </div>
+  );
+}
+
+// ── Course Modal Config Dialog (tách ra làm component riêng bên dưới) ──
+
+function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string; open: boolean; onClose: () => void }) {
+  const queryClient = useQueryClient();
+  const [form, setForm] = useState<Partial<CourseModalConfig>>({
+    confirm_enabled: true,
+    confirm_title: '',
+    confirm_description: '',
+    confirm_checkbox_text: '',
+    completion_enabled: true,
+    completion_title: '',
+    completion_description: '',
+  });
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['course-modal-config', courseId],
+    queryFn: () => getCourseModalConfig(courseId),
+    enabled: open && !!courseId,
+  });
+
+  useEffect(() => {
+    if (data) {
+      setForm({
+        confirm_enabled: data.confirm_enabled,
+        confirm_title: data.confirm_title,
+        confirm_description: data.confirm_description,
+        confirm_checkbox_text: data.confirm_checkbox_text,
+        completion_enabled: data.completion_enabled,
+        completion_title: data.completion_title,
+        completion_description: data.completion_description,
+      });
+    }
+  }, [data]);
+
+  const saveMut = useMutation({
+    mutationFn: () => updateCourseModalConfig(courseId, form),
+    onSuccess: () => {
+      toast.success('Đã lưu cấu hình modal');
+      queryClient.invalidateQueries({ queryKey: ['course-modal-config', courseId] });
+      onClose();
+    },
+    onError: () => toast.error('Lưu thất bại'),
+  });
+
+  const updateField = (key: string, value: unknown) => setForm(prev => ({ ...prev, [key]: value }));
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="text-xl">Cấu hình Modal — Khóa học</DialogTitle>
+          <p className="text-xs text-muted-foreground font-mono break-all">{courseId}</p>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="space-y-3 py-4">
+            <Skeleton className="h-6 w-48" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : (
+          <div className="space-y-6 py-2">
+            {/* ── Confirm Modal ── */}
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Confirm Modal (0% tiến độ)</Label>
+                <Switch
+                  checked={form.confirm_enabled}
+                  onCheckedChange={(v) => updateField('confirm_enabled', v)}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Tiêu đề {form.confirm_enabled && <span className="text-red-500">*</span>}</label>
+                  <input className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" placeholder="Hoàn thành khóa học!" value={form.confirm_title || ''} onChange={e => updateField('confirm_title', e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Mô tả {form.confirm_enabled && <span className="text-red-500">*</span>}</label>
+                  <textarea className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" placeholder="Cảm ơn bạn đã nỗ lực hoàn thành chương trình đào tạo..." value={form.confirm_description || ''} onChange={e => updateField('confirm_description', e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Nội dung checkbox {form.confirm_enabled && <span className="text-red-500">*</span>}</label>
+                  <input className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" placeholder="Tôi xác nhận đã hoàn thành khóa học..." value={form.confirm_checkbox_text || ''} onChange={e => updateField('confirm_checkbox_text', e.target.value)} />
+                </div>
+              </div>
+            </div>
+
+            {/* ── Completion Modal ── */}
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Completion Modal (100% tiến độ)</Label>
+                <Switch
+                  checked={form.completion_enabled}
+                  onCheckedChange={(v) => updateField('completion_enabled', v)}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Tiêu đề {form.completion_enabled && <span className="text-red-500">*</span>}</label>
+                  <input className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" placeholder="Congratulations!" value={form.completion_title || ''} onChange={e => updateField('completion_title', e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Mô tả {form.completion_enabled && <span className="text-red-500">*</span>}</label>
+                  <textarea className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" placeholder="Trở thành đối tác chiến lược..." value={form.completion_description || ''} onChange={e => updateField('completion_description', e.target.value)} />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button 
+            onClick={() => saveMut.mutate()} 
+            disabled={
+              saveMut.isPending || 
+              (form.confirm_enabled && (!form.confirm_title?.trim() || !form.confirm_description?.trim() || !form.confirm_checkbox_text?.trim())) || 
+              (form.completion_enabled && (!form.completion_title?.trim() || !form.completion_description?.trim()))
+            }
+          >
+            {saveMut.isPending ? 'Đang lưu...' : 'Lưu cấu hình'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Send Notification Dialog ──
+
+function SendNotificationDialog({ courseId, open, onClose }: { courseId: string; open: boolean; onClose: () => void }) {
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+
+  const sendMut = useMutation({
+    mutationFn: () => sendCourseNotification(courseId, { title, message }),
+    onSuccess: (data) => {
+      toast.success(`Đã gửi thông báo cho ${data.recipients} learner`);
+      setTitle('');
+      setMessage('');
+      onClose();
+    },
+    onError: (err: any) => {
+      const errMsg = err.response?.data?.error;
+      if (errMsg === 'No enrolled learners found') {
+        toast.error('Không tìm thấy học viên nào! Có thể do khóa học chưa có ai đăng ký hoặc các group được gán khóa học đang trống.');
+      } else {
+        toast.error(errMsg || 'Gửi thông báo thất bại');
+      }
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="text-xl flex items-center gap-2">
+            <Bell className="h-5 w-5 text-amber-500" />
+            Gửi thông báo
+          </DialogTitle>
+          <p className="text-xs text-muted-foreground font-mono break-all">{courseId}</p>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Tiêu đề</label>
+            <input
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm"
+              placeholder="Tiêu đề thông báo..."
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-sm font-medium">Nội dung <span className="text-red-500">*</span></label>
+            <textarea
+              className="flex min-h-[100px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none"
+              placeholder="Nội dung thông báo sẽ gửi cho tất cả learner enrolled..."
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-2 rounded-md">
+            ⚠️ Thông báo sẽ được gửi cho <strong>tất cả learner</strong> đang enrolled trong khóa học này.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Hủy</Button>
+          <Button
+            onClick={() => sendMut.mutate()}
+            disabled={sendMut.isPending || !message.trim()}
+            className="bg-amber-600 hover:bg-amber-700 text-white"
+          >
+            {sendMut.isPending ? 'Đang gửi...' : 'Gửi thông báo'}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,19 +1,20 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useHeaderInfo } from '@/utils/header-store';
 import { useAuthStore } from '@/utils/store';
-import { 
-  getReportSummary, 
-  getLearnerDetail, 
+import {
+  getReportSummary,
+  getLearnerDetail,
   LearnerDetailResult,
   getReportChart,
   getReportTopCourses,
   getReportUncompletedLearners
 } from '@/api/landa-admin';
+import { getOrgGroups } from '@/api/landa-groups';
 import { useQuery, useInfiniteQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Users, BookOpen, GraduationCap, UserCheck, Percent, Award, AlertTriangle, ShieldAlert,
-  ArrowUpRight, Calendar, Download, RefreshCcw, ChevronLeft, ChevronRight, BarChart3, ChevronDown, Check
+  ArrowUpRight, Calendar, Clock, Download, RefreshCcw, ChevronLeft, ChevronRight, BarChart3, ChevronDown, Check, CheckCircle2
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -24,7 +25,8 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   AreaChart, Area, ResponsiveContainer,
-  BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip, Cell, CartesianGrid
+  BarChart, Bar, XAxis, YAxis, Tooltip as ReTooltip, Cell, CartesianGrid,
+  LineChart, Line, Legend
 } from 'recharts';
 import {
   Dialog,
@@ -34,7 +36,16 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { toast } from 'sonner';
+import { exportReportExcel } from '@/utils/export-report';
 
 const cardVariant = {
   hidden: { opacity: 0, y: 20 },
@@ -48,89 +59,121 @@ const generateSparkline = (base: number) => {
     current = current + (Math.random() - 0.4) * (base * 0.1);
     data.push({ value: Math.max(0, Math.floor(current)) });
   }
-  data[data.length - 1].value = base; 
+  data[data.length - 1].value = base;
   return data;
 };
 
-function ChartTrendModal({ 
-  metricKey, 
-  title, 
-  isOpen, 
-  onClose 
-}: { 
-  metricKey: string | null; 
-  title: string; 
-  isOpen: boolean; 
-  onClose: () => void 
+function ChartTrendModal({
+  metricKey,
+  title,
+  isOpen,
+  onClose,
+  groupId
+}: {
+  metricKey: string | null;
+  title: string;
+  isOpen: boolean;
+  onClose: () => void;
+  groupId: number | 'all';
 }) {
   const currentYear = new Date().getFullYear();
   const [year, setYear] = useState(currentYear);
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: ['report-chart', year, metricKey],
-    queryFn: () => getReportChart(year, metricKey!),
+    queryKey: ['report-chart', year, metricKey, groupId],
+    queryFn: () => getReportChart(year, metricKey!, groupId === 'all' ? undefined : groupId),
     enabled: !!metricKey && isOpen,
   });
 
+  // Tạo màu ngẫu nhiên nhưng theo theme (pastel/mượt mà)
+  const getColors = () => [
+    '#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444',
+    '#ec4899', '#06b6d4', '#84cc16', '#6366f1', '#14b8a6'
+  ];
+
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-3xl bg-background border-border shadow-2xl">
-        <DialogHeader>
-          <div className="flex justify-between items-center pr-8">
-            <div>
-              <DialogTitle className="text-xl font-bold">{title}</DialogTitle>
-              <DialogDescription>Biểu đồ 12 tháng</DialogDescription>
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[90vw] lg:max-w-[1200px] bg-background border-border shadow-2xl sm:rounded-2xl p-0 overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-muted/10 pointer-events-none z-0" />
+        <div className="z-10 flex flex-col w-full h-full">
+          <DialogHeader className="p-6 border-b border-border/40 bg-muted/20 backdrop-blur-md">
+            <div className="flex justify-between items-center pr-8">
+              <div>
+                <DialogTitle className="text-2xl font-bold">{title}</DialogTitle>
+                <DialogDescription className="text-sm mt-1">Biểu đồ xu hướng 12 tháng</DialogDescription>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger className="flex items-center gap-2 h-10 px-4 rounded-xl border border-border bg-background shadow-sm text-sm font-medium outline-none focus-visible:ring-1 focus-visible:ring-primary hover:bg-muted transition-all">
+                  Năm {year}
+                  <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-[120px] rounded-lg">
+                  {[currentYear, currentYear - 1, currentYear - 2].map(y => (
+                    <DropdownMenuItem
+                      key={y}
+                      onClick={() => setYear(y)}
+                      className={`cursor-pointer text-[13px] mx-1 rounded-md mb-0.5 justify-between transition-colors ${year === y ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`}
+                    >
+                      Năm {y}
+                      <div className={`w-1.5 h-1.5 rounded-full transition-colors ${year === y ? 'bg-foreground' : 'bg-transparent'}`} />
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger className="flex items-center gap-2 h-9 px-3 rounded-md border border-border bg-background text-sm outline-none focus-visible:ring-1 focus-visible:ring-primary hover:bg-muted transition-colors">
-                Năm {year}
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-[120px] rounded-lg">
-                {[currentYear, currentYear - 1, currentYear - 2].map(y => (
-                  <DropdownMenuItem
-                    key={y}
-                    onClick={() => setYear(y)}
-                    className={`cursor-pointer text-[13px] mx-1 rounded-md mb-0.5 justify-between transition-colors ${year === y ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`}
-                  >
-                    Năm {y}
-                    <div className={`w-1.5 h-1.5 rounded-full transition-colors ${year === y ? 'bg-foreground' : 'bg-transparent'}`} />
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+          </DialogHeader>
+          <div className="h-[450px] w-full p-6">
+            {isLoading ? (
+              <Skeleton className="h-full w-full rounded-xl" />
+            ) : isError ? (
+              <div className="flex flex-col h-full items-center justify-center text-muted-foreground gap-2">
+                <AlertTriangle className="h-8 w-8 opacity-50" />
+                <span>Lỗi tải biểu đồ</span>
+              </div>
+            ) : data && data.data ? (
+              <ResponsiveContainer width="100%" height="100%">
+                {data.is_grouped ? (
+                  <LineChart data={data.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.3} />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                    <ReTooltip cursor={{ stroke: 'var(--muted)', strokeWidth: 2 }} contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                    {Object.keys(data.data[0] || {}).filter(k => k !== 'month').map((key, index) => (
+                      <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        stroke={getColors()[index % getColors().length]}
+                        strokeWidth={3}
+                        dot={{ r: 4, strokeWidth: 2 }}
+                        activeDot={{ r: 6 }}
+                      />
+                    ))}
+                  </LineChart>
+                ) : (
+                  <BarChart data={data.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.3} />
+                    <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
+                    <ReTooltip cursor={{ fill: 'var(--muted)', opacity: 0.4 }} contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
+                    <Bar dataKey="value" fill="var(--primary)" radius={[4, 4, 0, 0]} barSize={40} />
+                  </BarChart>
+                )}
+              </ResponsiveContainer>
+            ) : null}
           </div>
-        </DialogHeader>
-        <div className="h-[300px] w-full mt-4">
-          {isLoading ? (
-            <Skeleton className="h-full w-full rounded-xl" />
-          ) : isError ? (
-            <div className="flex flex-col h-full items-center justify-center text-muted-foreground gap-2">
-              <AlertTriangle className="h-8 w-8 opacity-50" />
-              <span>Lỗi tải biểu đồ</span>
-            </div>
-          ) : data && data.data ? (
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={data.data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" opacity={0.3} />
-                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11 }} />
-                <ReTooltip cursor={{ fill: 'var(--muted)', opacity: 0.4 }} contentStyle={{ borderRadius: '8px', border: '1px solid var(--border)' }} />
-                <Bar dataKey="value" fill="var(--primary)" radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : null}
         </div>
       </DialogContent>
     </Dialog>
   );
 }
 
-function TopCoursesWidget({ month, year }: { month: number, year: number }) {
+function TopCoursesWidget({ month, year, groupId }: { month: number, year: number, groupId: number | 'all' }) {
   const [page, setPage] = useState(1);
   const { data, isLoading } = useQuery({
-    queryKey: ['report-top-courses', month, year, page],
-    queryFn: () => getReportTopCourses({ month, year, page, page_size: 5 }),
+    queryKey: ['report-top-courses', month, year, page, groupId],
+    queryFn: () => getReportTopCourses({ month, year, page, page_size: 5, group_id: groupId === 'all' ? undefined : groupId }),
   });
 
   return (
@@ -167,9 +210,9 @@ function TopCoursesWidget({ month, year }: { month: number, year: number }) {
                   barGap={12}
                 >
                   <XAxis type="number" hide />
-                  <YAxis 
-                    dataKey="name" 
-                    type="category" 
+                  <YAxis
+                    dataKey="name"
+                    type="category"
                     tick={({ x, y, payload, index }) => {
                       const rank = index + 1 + (page - 1) * 5;
                       return (
@@ -212,19 +255,25 @@ function TopCoursesWidget({ month, year }: { month: number, year: number }) {
   );
 }
 
-function UncompletedLearnersWidget({ month, year, onSelectLearner, trendData }: { month: number, year: number, onSelectLearner: (u: string) => void, trendData?: Array<{day: string, count: number}> }) {
+function UncompletedWidget({ month, year, onSelectLearner, groupId, trendData }: { month: number, year: number, onSelectLearner: (u: string) => void, groupId: number | 'all', trendData?: Array<{ day: string, count: number }> }) {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'stalled' | 'learning'>('all');
 
   useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(search), 500);
+    const timer = setTimeout(() => setDebouncedSearch(search), 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  const { data, isLoading } = useQuery({
-    queryKey: ['report-uncompleted-learners', month, year, page, debouncedSearch],
-    queryFn: () => getReportUncompletedLearners({ month, year, page, search: debouncedSearch, page_size: 5 }),
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: ['report-uncompleted-learners', month, year, page, debouncedSearch, groupId, statusFilter],
+    queryFn: () => getReportUncompletedLearners({ 
+      month, year, page, page_size: 5, 
+      search: debouncedSearch, 
+      group_id: groupId === 'all' ? undefined : groupId,
+      status: statusFilter 
+    }),
   });
 
   return (
@@ -243,20 +292,34 @@ function UncompletedLearnersWidget({ month, year, onSelectLearner, trendData }: 
             <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-tighter">Chưa hoàn thành</span>
           </div>
         </div>
-        <div className="mt-3 relative">
-          <Input 
-            placeholder="Tìm theo username hoặc email..." 
-            className="h-9 text-xs bg-background border-border"
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1); }}
-          />
+        <div className="mt-3 flex gap-2">
+          <div className="relative flex-1">
+            <Input
+              placeholder="Tìm user/email..."
+              className="h-9 text-xs bg-background border-border"
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1); }}
+            />
+          </div>
+          <Select value={statusFilter} onValueChange={(val: any) => { setStatusFilter(val); setPage(1); }}>
+            <SelectTrigger className="w-[110px] h-9 text-xs bg-background border-border shadow-sm">
+              <SelectValue placeholder="Trạng thái" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all" className="text-xs">Tất cả</SelectItem>
+              <SelectItem value="learning" className="text-xs font-medium text-amber-600 focus:text-amber-700">Đang học</SelectItem>
+              <SelectItem value="stalled" className="text-xs font-medium text-red-600 focus:text-red-700">Ngưng HĐ</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </CardHeader>
       <CardContent className="p-0 flex-grow flex flex-col">
-        {trendData && trendData.length > 0 && (
+        {trendData && trendData.length > 0 && (() => {
+          const filtered = [...trendData];
+          return filtered.length > 0 ? (
           <div className="h-28 w-full border-b border-border/40 bg-muted/10 p-2">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={trendData}>
+              <AreaChart data={filtered}>
                 <defs>
                   <linearGradient id="uncompletedGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.2} />
@@ -270,7 +333,8 @@ function UncompletedLearnersWidget({ month, year, onSelectLearner, trendData }: 
               </AreaChart>
             </ResponsiveContainer>
           </div>
-        )}
+        ) : null;
+        })()}
         {isLoading ? (
           <div className="p-4 space-y-3 h-[325px] overflow-hidden">
             {[1, 2, 3, 4, 5].map(i => <Skeleton key={i} className="h-14 w-full rounded-xl" />)}
@@ -283,29 +347,42 @@ function UncompletedLearnersWidget({ month, year, onSelectLearner, trendData }: 
           <div className="divide-y divide-border/40 overflow-y-auto custom-scrollbar h-[325px]">
             <AnimatePresence>
               {data.results.map((u, i) => (
-                <motion.div key={u.username} 
+                <motion.div key={u.username}
                   initial={{ opacity: 0, x: -10 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ delay: i * 0.05 }}
                   className="flex items-center justify-between p-4 hover:bg-muted/50 transition-all cursor-pointer group"
                   onClick={() => onSelectLearner(u.username)}
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center text-[10px] font-bold text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition-all shrink-0">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 transition-all ${
+                      u.is_stalled
+                        ? 'bg-red-500/10 text-red-600 group-hover:bg-red-500 group-hover:text-white'
+                        : 'bg-amber-500/10 text-amber-600 group-hover:bg-amber-500 group-hover:text-white'
+                    }`}>
                       {u.username.substring(0, 2).toUpperCase()}
                     </div>
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-foreground group-hover:text-amber-600 transition-colors truncate">{u.username}</p>
+                      {u.course_name && (
+                        <p className="text-[10px] text-muted-foreground truncate mt-0.5">{u.course_name}</p>
+                      )}
                     </div>
                   </div>
-                  <div className="text-right shrink-0">
+                  <div className="text-right shrink-0 ml-3">
                     <div className="flex items-center justify-end gap-1 mb-1">
-                      <Calendar className="h-2.5 w-2.5 text-muted-foreground" />
+                      <Clock className="h-2.5 w-2.5 text-muted-foreground" />
                       <span className="text-[10px] text-muted-foreground">
-                        {u.enrolled_at ? new Date(u.enrolled_at).toLocaleDateString() : 'N/A'}
+                        {u.last_completion_at
+                          ? new Date(u.last_completion_at).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+                          : 'Chưa học'}
                       </span>
                     </div>
-                    <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Đang học</span>
+                    {u.is_stalled ? (
+                      <span className="text-[9px] font-bold text-red-600 bg-red-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Ngưng HĐ</span>
+                    ) : (
+                      <span className="text-[9px] font-bold text-amber-600 bg-amber-500/10 px-1.5 py-0.5 rounded-full uppercase tracking-tighter">Đang học</span>
+                    )}
                   </div>
                 </motion.div>
               ))}
@@ -326,14 +403,14 @@ function UncompletedLearnersWidget({ month, year, onSelectLearner, trendData }: 
   );
 }
 
-function LearnerDetailModal({ 
-  username, 
-  isOpen, 
-  onClose 
-}: { 
-  username: string | null; 
-  isOpen: boolean; 
-  onClose: () => void 
+function LearnerDetailModal({
+  username,
+  isOpen,
+  onClose
+}: {
+  username: string | null;
+  isOpen: boolean;
+  onClose: () => void
 }) {
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -356,7 +433,7 @@ function LearnerDetailModal({
     queryKey: ['learner-detail', username, debouncedSearch],
     queryFn: ({ pageParam = 1 }) => getLearnerDetail(username!, pageParam as number, debouncedSearch),
     enabled: !!username && isOpen,
-    getNextPageParam: (lastPage) => 
+    getNextPageParam: (lastPage) =>
       lastPage.current_page < lastPage.total_pages ? lastPage.current_page + 1 : undefined,
     initialPageParam: 1,
   });
@@ -381,108 +458,111 @@ function LearnerDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col p-0 overflow-hidden bg-background border-border shadow-2xl">
-        <DialogHeader className="p-6 pb-2">
-          <div className="flex items-center gap-4">
-            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
-              {username?.substring(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <DialogTitle className="text-xl font-bold text-foreground">Chi tiết học tập: {username}</DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
-                Danh sách các khóa học đã đăng ký và tiến độ học tập.
-              </DialogDescription>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="px-6 py-2">
-          <div className="relative">
-            <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Tìm kiếm khóa học..." 
-              className="pl-9 h-10 bg-muted/30 border-border focus-visible:ring-primary/30 text-sm"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-        </div>
-
-        <div className="flex-grow overflow-y-auto px-6 pb-6 custom-scrollbar space-y-4 mt-4">
-          {isLoading ? (
-            <div className="space-y-4">
-              {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
-            </div>
-          ) : isError ? (
-            <div className="text-center py-10 text-muted-foreground">
-              <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
-              <p>Lỗi khi tải dữ liệu chi tiết.</p>
-              <button onClick={() => refetch()} className="text-primary text-sm font-bold mt-2">Thử lại</button>
-            </div>
-          ) : allResults.length === 0 ? (
-            <div className="text-center py-20 text-muted-foreground italic">Không tìm thấy khóa học nào.</div>
-          ) : (
-            <div className="grid gap-3">
-              {allResults.map((course: LearnerDetailResult) => {
-                const radius = 16;
-                const stroke = 3;
-                const normalizedRadius = radius - stroke;
-                const circumference = normalizedRadius * 2 * Math.PI;
-                const strokeDashoffset = circumference - ((course.progress || 0) / 100) * circumference;
-
-                return (
-                  <div key={course.course_id} className="group p-4 rounded-xl border border-border bg-muted/5 hover:bg-muted/20 hover:border-primary/20 transition-all flex items-center justify-between gap-4">
-                    <div className="min-w-0 flex-grow">
-                      <p className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors">{course.course_name}</p>
-                      <p className="text-[10px] text-muted-foreground mt-1 truncate">ID: {course.course_id}</p>
-                    </div>
-
-                    <div className="shrink-0 flex items-center gap-3">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="relative flex items-center justify-center w-10 h-10">
-                          <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
-                            <circle
-                              stroke="currentColor"
-                              fill="transparent"
-                              strokeWidth={stroke}
-                              className="text-muted/50"
-                              r={normalizedRadius}
-                              cx={radius}
-                              cy={radius}
-                            />
-                            <motion.circle
-                              stroke="currentColor"
-                              fill="transparent"
-                              strokeWidth={stroke}
-                              strokeDasharray={`${circumference} ${circumference}`}
-                              initial={{ strokeDashoffset: circumference }}
-                              animate={{ strokeDashoffset }}
-                              transition={{ duration: 1, ease: "easeOut" }}
-                              className={course.is_completed ? "text-emerald-500" : "text-primary"}
-                              strokeLinecap="round"
-                              r={normalizedRadius}
-                              cx={radius}
-                              cy={radius}
-                            />
-                          </svg>
-                          <span className={`absolute text-[9px] font-black tabular-nums ${course.is_completed ? 'text-emerald-600' : 'text-primary'}`}>
-                            {Math.round(course.progress || 0)}
-                          </span>
-                        </div>
-                      </div>
-                      <span className={`text-[9px] font-bold uppercase tracking-tighter px-1.5 py-0.5 rounded-full ${course.is_completed ? 'bg-emerald-500/10 text-emerald-600' : 'bg-primary/10 text-primary'}`}>
-                        {course.is_completed ? 'Hoàn thành' : 'Đang học'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-              
-              <div ref={observerTarget} className="h-10 flex items-center justify-center">
-                {isFetchingNextPage && <RefreshCcw className="h-5 w-5 animate-spin text-muted-foreground" />}
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:max-w-[90vw] lg:max-w-[1200px] max-h-[85vh] flex flex-col p-0 overflow-hidden bg-background border-border shadow-2xl sm:rounded-2xl">
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-transparent to-muted/10 pointer-events-none z-0" />
+        <div className="z-10 flex flex-col h-full overflow-hidden">
+          <DialogHeader className="p-6 pb-5 border-b border-border/40 bg-muted/20 backdrop-blur-md shrink-0">
+            <div className="flex items-center gap-4">
+              <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center text-xl font-bold text-primary shadow-inner border border-primary/10">
+                {username?.substring(0, 2).toUpperCase()}
+              </div>
+              <div className="flex-1 text-left">
+                <DialogTitle className="text-2xl font-bold text-foreground">Chi tiết học tập: {username}</DialogTitle>
+                <DialogDescription className="text-sm text-muted-foreground mt-1">
+                  Danh sách các khóa học đã đăng ký và tiến độ học tập.
+                </DialogDescription>
               </div>
             </div>
-          )}
+          </DialogHeader>
+
+          <div className="px-6 py-4 bg-muted/10 border-b border-border/40 z-10 shrink-0">
+            <div className="relative max-w-md">
+              <Users className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Tìm kiếm khóa học..."
+                className="pl-9 h-10 bg-background border-border shadow-sm focus-visible:ring-primary/30 text-sm rounded-xl transition-all"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="flex-grow overflow-y-auto px-6 py-6 custom-scrollbar space-y-4 z-10 bg-muted/5">
+            {isLoading ? (
+              <div className="space-y-4">
+                {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+              </div>
+            ) : isError ? (
+              <div className="text-center py-10 text-muted-foreground">
+                <AlertTriangle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Lỗi khi tải dữ liệu chi tiết.</p>
+                <button onClick={() => refetch()} className="text-primary text-sm font-bold mt-2">Thử lại</button>
+              </div>
+            ) : allResults.length === 0 ? (
+              <div className="text-center py-20 text-muted-foreground italic">Không tìm thấy khóa học nào.</div>
+            ) : (
+              <div className="grid gap-3">
+                {allResults.map((course: LearnerDetailResult) => {
+                  const radius = 16;
+                  const stroke = 3;
+                  const normalizedRadius = radius - stroke;
+                  const circumference = normalizedRadius * 2 * Math.PI;
+                  const strokeDashoffset = circumference - ((course.progress || 0) / 100) * circumference;
+
+                  return (
+                    <div key={course.course_id} className="group p-4 rounded-xl border border-border bg-card text-card-foreground shadow-sm hover:shadow-md hover:border-primary/40 transition-all flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-grow">
+                        <p className="text-sm font-bold truncate group-hover:text-primary transition-colors">{course.course_name}</p>
+                        <p className="text-[10px] text-muted-foreground mt-1 truncate">ID: {course.course_id}</p>
+                      </div>
+
+                      <div className="shrink-0 flex items-center justify-end w-[140px] gap-3">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="relative flex items-center justify-center w-10 h-10">
+                            <svg height={radius * 2} width={radius * 2} className="transform -rotate-90">
+                              <circle
+                                stroke="currentColor"
+                                fill="transparent"
+                                strokeWidth={stroke}
+                                className="text-primary/10"
+                                r={normalizedRadius}
+                                cx={radius}
+                                cy={radius}
+                              />
+                              <motion.circle
+                                stroke="currentColor"
+                                fill="transparent"
+                                strokeWidth={stroke}
+                                strokeDasharray={`${circumference} ${circumference}`}
+                                initial={{ strokeDashoffset: circumference }}
+                                animate={{ strokeDashoffset }}
+                                transition={{ duration: 1, ease: "easeOut" }}
+                                className={course.is_completed ? "text-primary" : "text-primary/40"}
+                                strokeLinecap="round"
+                                r={normalizedRadius}
+                                cx={radius}
+                                cy={radius}
+                              />
+                            </svg>
+                            <span className={`absolute text-[9px] font-black tabular-nums ${course.is_completed ? 'text-primary' : 'text-muted-foreground'}`}>
+                              {Math.round(course.progress || 0)}
+                            </span>
+                          </div>
+                        </div>
+                        <span className={`w-[75px] text-center text-[9px] font-bold uppercase tracking-tighter px-1.5 py-1 rounded-full ${course.is_completed ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground'}`}>
+                          {course.is_completed ? 'Hoàn thành' : 'Đang học'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                <div ref={observerTarget} className="h-10 flex items-center justify-center">
+                  {isFetchingNextPage && <RefreshCcw className="h-5 w-5 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
@@ -498,15 +578,49 @@ export default function ReportSummaryPage() {
   const currentYear = new Date().getFullYear();
   const [selectedMonth, setSelectedMonth] = useState<number>(currentMonth);
   const [selectedYear, setSelectedYear] = useState<number>(currentYear);
+  const [selectedGroupId, setSelectedGroupId] = useState<number | 'all'>('all');
+  const [isExporting, setIsExporting] = useState(false);
 
   const user = useAuthStore((s) => s.user);
   const isSuperadmin = user?.role === 'superadmin' || user?.isSuperuser === true;
 
-  const { data, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['report-summary', selectedMonth, selectedYear],
-    queryFn: () => getReportSummary({ month: selectedMonth, year: selectedYear }),
+  const { data: groupsData } = useQuery({
+    queryKey: ['admin-groups-list'],
+    queryFn: () => getOrgGroups({ page_size: 100 }),
     enabled: isSuperadmin,
   });
+
+  const { data, isLoading, isError, refetch, isFetching } = useQuery({
+    queryKey: ['report-summary', selectedMonth, selectedYear, selectedGroupId],
+    queryFn: () => getReportSummary({ month: selectedMonth, year: selectedYear, group_id: selectedGroupId === 'all' ? undefined : selectedGroupId }),
+    enabled: isSuperadmin,
+  });
+
+  const prevMonth = selectedMonth === 1 ? 12 : selectedMonth - 1;
+  const prevMonthYear = selectedMonth === 1 ? selectedYear - 1 : selectedYear;
+
+  const { data: prevData } = useQuery({
+    queryKey: ['report-summary', prevMonth, prevMonthYear, selectedGroupId],
+    queryFn: () => getReportSummary({ month: prevMonth, year: prevMonthYear, group_id: selectedGroupId === 'all' ? undefined : selectedGroupId }),
+    enabled: isSuperadmin,
+  });
+
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const groupName = selectedGroupId === 'all'
+        ? 'Tất cả'
+        : (groupsData?.groups.find(g => g.id === selectedGroupId)?.name || String(selectedGroupId));
+      await exportReportExcel({
+        selectedYear,
+        selectedGroupId,
+        groupName,
+        exporterName: user?.username || 'Admin',
+      });
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   if (!isSuperadmin) {
     return (
@@ -515,7 +629,7 @@ export default function ReportSummaryPage() {
           <ShieldAlert className="h-12 w-12 text-destructive mx-auto mb-4" />
           <h2 className="text-xl font-bold text-destructive mb-2">Truy cập bị hạn chế</h2>
           <p className="text-muted-foreground text-sm max-w-md mx-auto">
-            Bạn không có quyền cần thiết để xem phân tích hệ thống. 
+            Bạn không có quyền cần thiết để xem phân tích hệ thống.
             Chỉ quản trị viên cấp cao (superuser) mới có thể truy cập báo cáo chi tiết.
           </p>
         </div>
@@ -563,31 +677,63 @@ export default function ReportSummaryPage() {
   }
 
   const overview = data.overview;
+  
+  const calculateTrend = (current: number | string, previous: number | string | undefined, isAbsolute: boolean = false, suffix: string = '%') => {
+    if (previous === undefined || previous === null) return { text: '', type: 'up' as const };
+    
+    const cur = Number(current) || 0;
+    const prev = Number(previous) || 0;
+
+    const diff = cur - prev;
+    const type = diff >= 0 ? 'up' as const : 'down' as const;
+    const sign = diff > 0 ? '+' : (diff < 0 ? '-' : '');
+
+    if (isAbsolute) {
+      const formatted = suffix === '' ? Math.abs(diff).toLocaleString('en-US') : Math.abs(diff).toFixed(1);
+      return { text: `${sign}${formatted}${suffix}`, type };
+    }
+
+    if (prev === 0) {
+      if (cur > 0) return { text: `+100.0${suffix}`, type: 'up' as const };
+      return { text: `0.0${suffix}`, type: 'up' as const };
+    }
+
+    const percent = (diff / Math.abs(prev)) * 100;
+    return { text: `${sign}${Math.abs(percent).toFixed(1)}${suffix}`, type };
+  };
+
+  const prevOverview = prevData?.overview;
+  const learnersTrend = calculateTrend(overview.total_learners, prevOverview?.total_learners, true, '');
+  const activeTrend = calculateTrend(overview.active_learners, prevOverview?.active_learners, true, '');
+  const completionTrend = calculateTrend(overview.completion_rate, prevOverview?.completion_rate, true, '%');
+  const enrollmentsTrend = calculateTrend(overview.total_enrollments, prevOverview?.total_enrollments, true, '');
+
   const stats = [
-    { title: 'Tổng học viên', value: overview.total_learners, icon: Users, color: '#3b82f6', trend: '+12%', key: 'total_learners' },
-    { title: 'Tổng nhân sự', value: overview.total_staff, icon: ShieldAlert, color: '#8b5cf6', trend: '+2%', key: 'total_staff' },
-    { title: 'Học viên hoạt động', value: overview.active_learners, icon: UserCheck, color: '#10b981', trend: '+8%', key: 'active_learners' },
-    { title: 'Tổng khóa học', value: overview.total_courses, icon: BookOpen, color: '#f59e0b', trend: '+5%', key: 'total_courses' },
+    { title: 'Tổng học viên', value: overview.total_learners, icon: Users, colorClass: 'text-blue-500 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400', trend: learnersTrend.text, trendType: learnersTrend.type, key: 'total_learners', suffix: '' },
+    { title: 'Học viên đang hoạt động', value: overview.active_learners, icon: UserCheck, colorClass: 'text-emerald-500 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400', trend: activeTrend.text, trendType: activeTrend.type, key: 'active_learners', suffix: '' },
+    { title: 'Tỷ lệ hoàn thành', value: overview.completion_rate, icon: CheckCircle2, colorClass: 'text-purple-500 bg-purple-50 dark:bg-purple-500/10 dark:text-purple-400', trend: completionTrend.text, trendType: completionTrend.type, key: 'completion_rate', suffix: '%' },
+    { title: 'Lượt đăng ký hàng tháng', value: overview.total_enrollments, icon: Calendar, colorClass: 'text-red-500 bg-red-50 dark:bg-red-500/10 dark:text-red-400', trend: enrollmentsTrend.text, trendType: enrollmentsTrend.type, key: 'total_enrollments', suffix: '' },
   ];
 
   return (
     <div className="p-6 space-y-8 max-w-7xl mx-auto pb-20 relative">
-      <LearnerDetailModal 
+      <LearnerDetailModal
         username={selectedLearner}
         isOpen={!!selectedLearner}
         onClose={() => setSelectedLearner(null)}
       />
 
-      <ChartTrendModal 
+      <ChartTrendModal
         metricKey={chartMetric?.key || null}
         title={chartMetric?.title || ''}
         isOpen={!!chartMetric}
         onClose={() => setChartMetric(null)}
+        groupId={selectedGroupId}
       />
 
       {/* Background Decor */}
-      <div className="absolute top-0 left-0 w-full h-full -z-10 pointer-events-none opacity-[0.03] dark:opacity-[0.05]" 
-           style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, var(--foreground) 1px, transparent 0)', backgroundSize: '32px 32px' }} />
+      <div className="absolute top-0 left-0 w-full h-full -z-10 pointer-events-none opacity-[0.03] dark:opacity-[0.05]"
+        style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, var(--foreground) 1px, transparent 0)', backgroundSize: '32px 32px' }} />
 
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-6">
@@ -595,12 +741,41 @@ export default function ReportSummaryPage() {
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Tổng quan Phân tích</h1>
           <p className="text-muted-foreground text-sm">Chỉ số hệ thống thời gian thực và hiệu suất người học.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <DropdownMenu>
-            <DropdownMenuTrigger className="flex items-center gap-2 h-9 pl-3 pr-2 py-0 text-xs font-medium rounded-full border border-border bg-background hover:bg-muted outline-none focus-visible:ring-1 focus-visible:ring-primary transition-all text-foreground shadow-sm">
-              <Calendar className="h-3.5 w-3.5 text-muted-foreground" />
-              Tháng {selectedMonth}/{selectedYear}
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+            <DropdownMenuTrigger className="flex items-center gap-2 h-9 pl-3 pr-2 py-0 text-xs font-medium rounded-full border border-border bg-background hover:bg-muted outline-none focus-visible:ring-1 focus-visible:ring-primary transition-all text-foreground shadow-sm max-w-full sm:max-w-none">
+              <Users className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="truncate max-w-[100px] sm:max-w-[120px]">
+                {selectedGroupId === 'all' ? 'Tất cả các doanh nghiệp' : groupsData?.groups.find(g => g.id === selectedGroupId)?.name || 'Đang tải...'}
+              </span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-1 shrink-0" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-[200px] max-h-[300px] overflow-y-auto rounded-lg custom-scrollbar">
+              <DropdownMenuItem
+                onClick={() => setSelectedGroupId('all')}
+                className={`cursor-pointer text-[13px] mx-1 rounded-md mb-0.5 justify-between transition-colors ${selectedGroupId === 'all' ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`}
+              >
+                Tất cả các doanh nghiệp
+                <div className={`w-1.5 h-1.5 rounded-full transition-colors ${selectedGroupId === 'all' ? 'bg-foreground' : 'bg-transparent'}`} />
+              </DropdownMenuItem>
+              {groupsData?.groups.map(g => (
+                <DropdownMenuItem
+                  key={g.id}
+                  onClick={() => setSelectedGroupId(g.id)}
+                  className={`cursor-pointer text-[13px] mx-1 rounded-md mb-0.5 justify-between transition-colors ${selectedGroupId === g.id ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`}
+                >
+                  <span className="truncate">{g.name}</span>
+                  <div className={`w-1.5 h-1.5 rounded-full transition-colors ${selectedGroupId === g.id ? 'bg-foreground' : 'bg-transparent'}`} />
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex items-center gap-2 h-9 pl-3 pr-2 py-0 text-xs font-medium rounded-full border border-border bg-background hover:bg-muted outline-none focus-visible:ring-1 focus-visible:ring-primary transition-all text-foreground shadow-sm shrink-0">
+              <Calendar className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <span className="whitespace-nowrap">Tháng {selectedMonth}/{selectedYear}</span>
+              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground ml-1 shrink-0" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-[140px] max-h-[300px] overflow-y-auto rounded-lg custom-scrollbar">
               {[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(offset => {
@@ -625,19 +800,23 @@ export default function ReportSummaryPage() {
               })}
             </DropdownMenuContent>
           </DropdownMenu>
-          <button onClick={() => refetch()} className={`inline-flex items-center justify-center h-9 w-9 rounded-full border border-border bg-background hover:bg-muted transition-all text-muted-foreground hover:text-foreground active:scale-95 shadow-sm ${isFetching ? 'animate-spin' : ''}`}>
+          <button onClick={() => refetch()} className={`inline-flex items-center justify-center h-9 w-9 rounded-full border border-border bg-background hover:bg-muted transition-all text-muted-foreground hover:text-foreground active:scale-95 shadow-sm shrink-0 ${isFetching ? 'animate-spin' : ''}`}>
             <RefreshCcw className="h-3.5 w-3.5" />
           </button>
-          <button className="inline-flex items-center gap-2 h-9 px-4 text-xs font-medium rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all active:scale-95 shadow-md">
-            <Download className="h-3.5 w-3.5" />
-            Xuất dữ liệu
+          <button
+            onClick={handleExport}
+            disabled={isExporting}
+            className={`inline-flex items-center gap-2 h-9 px-4 text-xs font-medium rounded-full bg-primary text-primary-foreground hover:bg-primary/90 transition-all active:scale-95 shadow-md shrink-0 ${isExporting ? 'opacity-70 cursor-not-allowed' : ''}`}
+          >
+            {isExporting ? <RefreshCcw className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+            <span className="whitespace-nowrap">{isExporting ? 'Đang xuất...' : 'Xuất dữ liệu'}</span>
           </button>
         </div>
       </div>
 
       {/* Stat Cards Grid */}
       <motion.div
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+        className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4"
         initial="hidden"
         animate="visible"
         variants={{
@@ -647,50 +826,39 @@ export default function ReportSummaryPage() {
       >
         {stats.map((stat) => (
           <motion.div key={stat.title} variants={cardVariant}>
-            <Card 
-              className="shadow-sm border-border group hover:border-primary/30 hover:shadow-md transition-all cursor-pointer overflow-hidden relative"
+            <Card
+              className="shadow-sm border-border/60 hover:border-border transition-all cursor-pointer overflow-hidden relative bg-card"
               onClick={() => setChartMetric({ key: stat.key, title: stat.title })}
             >
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <BarChart3 className="h-3.5 w-3.5 text-primary/50" />
-              </div>
-              <CardHeader className="flex flex-row items-center justify-between p-4 pb-0">
-                <CardTitle className="text-[13px] font-medium text-muted-foreground group-hover:text-foreground transition-colors">{stat.title}</CardTitle>
-                <div className="p-2 rounded-lg bg-muted group-hover:bg-primary/10 transition-colors">
-                  <stat.icon className="h-4 w-4 text-muted-foreground/70 group-hover:text-primary transition-colors" />
-                </div>
-              </CardHeader>
-              <CardContent className="p-4 pt-2">
-                <div className="flex items-baseline gap-2">
-                  <div className="text-2xl font-bold tracking-tight text-foreground tabular-nums">
-                    {stat.value}
+              <CardContent className="p-5 flex flex-col gap-4">
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`p-1.5 rounded-md ${stat.colorClass}`}>
+                      <stat.icon className="h-4 w-4" />
+                    </div>
+                    <span className="text-[13px] font-medium text-muted-foreground">{stat.title}</span>
                   </div>
-                  <div className="text-[10px] font-bold text-emerald-500 flex items-center bg-emerald-500/10 px-1.5 rounded-sm">
-                    <ArrowUpRight className="h-2 w-2 mr-0.5" />
-                    {stat.trend}
+                  <div className="w-5 h-5 rounded-full bg-muted/50 flex items-center justify-center text-[10px] font-bold text-muted-foreground shrink-0">
+                    !
                   </div>
                 </div>
-                
-                <div className="h-12 w-full mt-3 -mx-4 pointer-events-none">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={generateSparkline(typeof stat.value === 'number' ? stat.value : 100)}>
-                      <defs>
-                        <linearGradient id={`gradient-${stat.title.replace(/\s+/g, '-')}`} x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="0%" stopColor={stat.color} stopOpacity={0.2} />
-                          <stop offset="100%" stopColor={stat.color} stopOpacity={0} />
-                        </linearGradient>
-                      </defs>
-                      <Area
-                        type="monotone"
-                        dataKey="value"
-                        stroke={stat.color}
-                        strokeWidth={2}
-                        fill={`url(#gradient-${stat.title.replace(/\s+/g, '-')})`}
-                        isAnimationActive={true}
-                        animationDuration={1500}
-                      />
-                    </AreaChart>
-                  </ResponsiveContainer>
+
+                <div>
+                  <div className="text-[34px] font-bold tracking-tight text-foreground leading-none mb-4">
+                    {typeof stat.value === 'number' ? stat.value.toLocaleString('en-US') : stat.value}{stat.suffix}
+                  </div>
+                  
+                  {stat.trend && (
+                    <div className="inline-flex">
+                      <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${
+                        stat.trendType === 'up' 
+                          ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400' 
+                          : 'bg-orange-50 text-orange-600 dark:bg-orange-500/10 dark:text-orange-400'
+                      }`}>
+                        {stat.trend} so với tháng trước
+                      </span>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -709,14 +877,15 @@ export default function ReportSummaryPage() {
         }}
       >
         <motion.div variants={cardVariant} className="md:col-span-7">
-          <TopCoursesWidget month={selectedMonth} year={selectedYear} />
+          <TopCoursesWidget month={selectedMonth} year={selectedYear} groupId={selectedGroupId} />
         </motion.div>
 
         <motion.div variants={cardVariant} className="md:col-span-5">
-          <UncompletedLearnersWidget 
-            month={selectedMonth} 
-            year={selectedYear} 
-            onSelectLearner={setSelectedLearner} 
+          <UncompletedWidget
+            month={selectedMonth}
+            year={selectedYear}
+            onSelectLearner={setSelectedLearner}
+            groupId={selectedGroupId}
             trendData={data.lists.uncompleted_trend}
           />
         </motion.div>

@@ -1,0 +1,158 @@
+/**
+ * help-docs.tsx — Help Docs Page
+ * Layout 2 panel: cây folder (trái) + editor/viewer (phải)
+ * Giống Course Editor nhưng cho Help Docs.
+ */
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '@/utils/store';
+import { useHeaderInfo } from '@/utils/header-store';
+import { getHelpFolders, getHelpPages } from '@/api/help-docs';
+import HelpDocsTree from '@/components/help-docs/HelpDocsTree';
+import HelpPageEditor from '@/components/help-docs/HelpPageEditor';
+import { Skeleton } from '@/components/ui/skeleton';
+import { AlertCircle, BookOpen, Menu } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
+
+export default function HelpDocsPage() {
+  useHeaderInfo('Help Docs');
+  const user = useAuthStore((s) => s.user);
+  const isSuperuser = !!user?.isSuperuser;
+  const [selectedPageId, setSelectedPageId] = useState<number | null>(null);
+
+  const { data: foldersData, isLoading: foldersLoading, isError: foldersError } = useQuery({
+    queryKey: ['help-folders'],
+    queryFn: getHelpFolders,
+    staleTime: 30_000,
+  });
+
+  const { data: pagesData, isLoading: pagesLoading } = useQuery({
+    queryKey: ['help-pages'],
+    queryFn: () => getHelpPages(),
+    staleTime: 30_000,
+  });
+
+  const folders = foldersData?.folders || [];
+  const pages = pagesData?.pages || [];
+  const isLoading = foldersLoading || pagesLoading;
+
+  if (isLoading) {
+    return (
+      <div className="flex h-[calc(100vh-64px)] p-6 gap-6">
+        <div className="w-80 space-y-3">
+          {[...Array(5)].map((_, i) => (
+            <Skeleton key={i} className="h-8 w-full" style={{ width: `${90 - i * 8}%` }} />
+          ))}
+        </div>
+        <div className="flex-1">
+          <Skeleton className="h-[500px] w-full rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (foldersError) {
+    return (
+      <div className="p-6">
+        <div className="bg-destructive/10 border-l-4 border-destructive text-destructive p-5 rounded-xl flex gap-3">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div>
+            <h3 className="font-semibold">Lỗi tải Help Docs</h3>
+            <p className="text-sm mt-1 opacity-80">
+              Không thể kết nối đến server. Kiểm tra lại kết nối.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const treeContent = (
+    <HelpDocsTree
+      folders={folders}
+      pages={pages}
+      selectedPageId={selectedPageId}
+      onSelectPage={setSelectedPageId}
+      isSuperuser={isSuperuser}
+    />
+  );
+
+  return (
+    <div className="flex h-[calc(100vh-64px)] bg-background flex-col md:flex-row">
+      {/* Mobile Top Bar */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-border bg-background sticky top-0 z-10 shrink-0">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-primary" />
+          <h2 className="text-sm font-bold text-foreground">Help Docs</h2>
+        </div>
+        <Sheet>
+          <SheetTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 flex gap-2">
+              <Menu className="h-4 w-4" />
+              Mục lục
+            </Button>
+          </SheetTrigger>
+          <SheetContent side="left" className="w-[300px] p-0 flex flex-col">
+            <div className="p-4 border-b border-border bg-background/80 shrink-0">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-4 w-4 text-primary" />
+                <h2 className="text-base font-bold text-foreground">Help Docs</h2>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-0.5 opacity-60">
+                Tài liệu hướng dẫn sử dụng
+              </p>
+            </div>
+            <div className="p-3 flex-1 overflow-y-auto">
+              {treeContent}
+            </div>
+          </SheetContent>
+        </Sheet>
+      </div>
+
+      {/* Desktop Sidebar: Folder Tree */}
+      <div className="hidden md:flex w-80 border-r border-border overflow-y-auto bg-muted/20 flex-col shrink-0">
+        <div className="p-4 border-b border-border bg-background/80 backdrop-blur sticky top-0 z-10">
+          <div className="flex items-center gap-2">
+            <BookOpen className="h-4 w-4 text-primary" />
+            <h2 className="text-base font-bold text-foreground">Help Docs</h2>
+          </div>
+          <p className="text-[10px] text-muted-foreground mt-0.5 opacity-60">
+            Tài liệu hướng dẫn sử dụng
+          </p>
+        </div>
+        <div className="p-3 flex-1 overflow-y-auto">
+          {treeContent}
+        </div>
+      </div>
+
+      {/* Main Content: Page Editor/Viewer */}
+      <div className="flex-1 overflow-y-auto bg-background/50">
+        {selectedPageId ? (
+          <div className="p-4 md:p-6 max-w-4xl">
+            <HelpPageEditor
+              key={selectedPageId}
+              pageId={selectedPageId}
+              isSuperuser={isSuperuser}
+            />
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-full text-muted-foreground flex-col gap-4">
+            <div className="w-20 h-20 bg-muted/40 rounded-full flex items-center justify-center shadow-inner">
+              <BookOpen className="h-8 w-8 opacity-30" />
+            </div>
+            <div className="text-center">
+              <p className="text-base font-medium">Chọn trang để xem</p>
+              <p className="text-sm opacity-60 mt-1">
+                {isSuperuser
+                  ? 'Chọn trang ở sidebar trái hoặc tạo folder/trang mới'
+                  : 'Chọn trang ở sidebar trái để đọc hướng dẫn'
+                }
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

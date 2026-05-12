@@ -58,6 +58,12 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { title: 'Report Summary', url: '/report-summary', module: 'report_summary', fallbackIcon: 'BarChart3' },
     ],
+  },
+  {
+    group: 'Support',
+    items: [
+      { title: 'Help Docs', url: '/help-docs', module: 'help_docs', fallbackIcon: 'BookOpen' },
+    ],
   }
 ];
 
