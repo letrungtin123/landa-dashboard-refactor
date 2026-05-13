@@ -488,6 +488,9 @@ export default function CoursesPage() {
 function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string; open: boolean; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [form, setForm] = useState<Partial<CourseModalConfig>>({
+    welcome_enabled: true,
+    welcome_title: '',
+    welcome_description: '',
     confirm_enabled: true,
     confirm_title: '',
     confirm_description: '',
@@ -506,6 +509,9 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
   useEffect(() => {
     if (data) {
       setForm({
+        welcome_enabled: data.welcome_enabled,
+        welcome_title: data.welcome_title,
+        welcome_description: data.welcome_description,
         confirm_enabled: data.confirm_enabled,
         confirm_title: data.confirm_title,
         confirm_description: data.confirm_description,
@@ -545,6 +551,27 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
           </div>
         ) : (
           <div className="space-y-6 py-2">
+            {/* ── Welcome Modal ── */}
+            <div className="space-y-3 rounded-lg border border-border p-4">
+              <div className="flex items-center justify-between">
+                <Label className="text-sm font-semibold">Welcome Modal (Chào mừng)</Label>
+                <Switch
+                  checked={form.welcome_enabled}
+                  onCheckedChange={(v) => updateField('welcome_enabled', v)}
+                />
+              </div>
+              <div className="space-y-2">
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Tiêu đề {form.welcome_enabled && <span className="text-red-500">*</span>}</label>
+                  <input className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm" placeholder="Chào mừng bạn đến với khóa học!" value={form.welcome_title || ''} onChange={e => updateField('welcome_title', e.target.value)} />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs text-muted-foreground">Mô tả {form.welcome_enabled && <span className="text-red-500">*</span>}</label>
+                  <textarea className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" placeholder="Chúc bạn có một trải nghiệm học tập thật tốt..." value={form.welcome_description || ''} onChange={e => updateField('welcome_description', e.target.value)} />
+                </div>
+              </div>
+            </div>
+
             {/* ── Confirm Modal ── */}
             <div className="space-y-3 rounded-lg border border-border p-4">
               <div className="flex items-center justify-between">
@@ -599,6 +626,7 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
             onClick={() => saveMut.mutate()} 
             disabled={
               saveMut.isPending || 
+              (form.welcome_enabled && (!form.welcome_title?.trim() || !form.welcome_description?.trim())) || 
               (form.confirm_enabled && (!form.confirm_title?.trim() || !form.confirm_description?.trim() || !form.confirm_checkbox_text?.trim())) || 
               (form.completion_enabled && (!form.completion_title?.trim() || !form.completion_description?.trim()))
             }

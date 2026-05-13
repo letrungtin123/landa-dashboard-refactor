@@ -233,6 +233,9 @@ export async function bulkCourseAction(ids: string[], action: 'staff_only' | 'pu
 
 export interface CourseModalConfig {
   course_id: string;
+  welcome_enabled: boolean;
+  welcome_title: string;
+  welcome_description: string;
   confirm_enabled: boolean;
   confirm_title: string;
   confirm_description: string;
