@@ -243,6 +243,8 @@ export interface CourseModalConfig {
   completion_enabled: boolean;
   completion_title: string;
   completion_description: string;
+  completion_social_type: string;
+  completion_social_link: string;
   updated_at: string | null;
 }
 

@@ -19,11 +19,20 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { toast } from 'sonner';
 import {
-  BookOpen, GraduationCap, Globe, Edit2, Plus, ImagePlus, Loader2, LayoutTemplate, ArrowRight, FolderOpen, Archive, ArchiveRestore, Settings2, Bell
+  BookOpen, GraduationCap, Globe, Edit2, Plus, ImagePlus, Loader2, LayoutTemplate, ArrowRight, FolderOpen, Archive, ArchiveRestore, Settings2, Bell, Facebook, Instagram, MessageCircle, ChevronDown, Ban
 } from 'lucide-react';
 import { CourseFilesModal } from '@/components/course-editor/CourseFilesModal';
 import { Switch } from '@/components/ui/switch';
+import FacebookIcon from '@/assets/SocialIcon/facebook.png';
+import InstagramIcon from '@/assets/SocialIcon/instagram.png';
+import ZaloIcon from '@/assets/SocialIcon/zalo.png';
 import { Label } from '@/components/ui/label';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export default function CoursesPage() {
   useHeaderInfo('Courses');
@@ -498,7 +507,19 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
     completion_enabled: true,
     completion_title: '',
     completion_description: '',
+    completion_social_type: '',
+    completion_social_link: '',
   });
+
+  const isValidUrl = (str: string) => {
+    if (!str) return true;
+    try {
+      new URL(str);
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['course-modal-config', courseId],
@@ -519,6 +540,8 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
         completion_enabled: data.completion_enabled,
         completion_title: data.completion_title,
         completion_description: data.completion_description,
+        completion_social_type: data.completion_social_type || '',
+        completion_social_link: data.completion_social_link || '',
       });
     }
   }, [data]);
@@ -615,6 +638,73 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
                   <label className="text-xs text-muted-foreground">Mô tả {form.completion_enabled && <span className="text-red-500">*</span>}</label>
                   <textarea className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm resize-none" placeholder="Trở thành đối tác chiến lược..." value={form.completion_description || ''} onChange={e => updateField('completion_description', e.target.value)} />
                 </div>
+                {form.completion_enabled && (
+                  <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border mt-2">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Loại mạng xã hội</label>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-1 text-sm outline-none focus:ring-1 focus:ring-primary/30 hover:bg-muted/50 transition-colors">
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const st = form.completion_social_type;
+                                if (st === 'zaloOA') return <img src={ZaloIcon} alt="Zalo" className="w-5 h-5 object-contain" />;
+                                if (st === 'facebook') return <img src={FacebookIcon} alt="Facebook" className="w-5 h-5 object-contain" />;
+                                if (st === 'website') return <Globe className="w-5 h-5 text-slate-500" />;
+                                if (st === 'instagram') return <img src={InstagramIcon} alt="Instagram" className="w-5 h-5 object-contain" />;
+                                return <Ban className="w-5 h-5 text-muted-foreground/50" />;
+                              })()}
+                              <span>
+                                {form.completion_social_type === 'zaloOA' ? 'Zalo OA' : 
+                                 form.completion_social_type === 'facebook' ? 'Facebook' : 
+                                 form.completion_social_type === 'website' ? 'Website' : 
+                                 form.completion_social_type === 'instagram' ? 'Instagram' : 'Không dùng'}
+                              </span>
+                            </div>
+                            <ChevronDown className="h-4 w-4 opacity-50" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] min-w-[200px] rounded-lg">
+                          {[
+                            { value: '', label: 'Không dùng', icon: <Ban className="w-5 h-5 text-muted-foreground/50" /> },
+                            { value: 'zaloOA', label: 'Zalo OA', icon: <img src={ZaloIcon} alt="Zalo" className="w-5 h-5 object-contain" /> },
+                            { value: 'facebook', label: 'Facebook', icon: <img src={FacebookIcon} alt="Facebook" className="w-5 h-5 object-contain" /> },
+                            { value: 'website', label: 'Website', icon: <Globe className="w-5 h-5 text-slate-500" /> },
+                            { value: 'instagram', label: 'Instagram', icon: <img src={InstagramIcon} alt="Instagram" className="w-5 h-5 object-contain" /> },
+                          ].map((type) => (
+                            <DropdownMenuItem
+                              key={type.value}
+                              onClick={() => {
+                                updateField('completion_social_type', type.value);
+                                if (!type.value) {
+                                  updateField('completion_social_link', '');
+                                }
+                              }}
+                              className={`cursor-pointer text-[13px] mx-1 rounded-md mb-0.5 justify-between transition-colors ${form.completion_social_type === type.value ? 'bg-muted font-medium text-foreground' : 'text-muted-foreground'}`}
+                            >
+                              <div className="flex items-center gap-2">
+                                {type.icon}
+                                {type.label}
+                              </div>
+                              <div className={`w-1.5 h-1.5 rounded-full transition-colors ${form.completion_social_type === type.value ? 'bg-foreground' : 'bg-transparent'}`} />
+                            </DropdownMenuItem>
+                          ))}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Đường dẫn (Link)</label>
+                      <input 
+                        className={`flex h-9 w-full rounded-md border bg-background px-3 py-1 text-sm ${!isValidUrl(form.completion_social_link || '') ? 'border-red-500 focus-visible:ring-red-500/30 text-red-600' : 'border-input'}`} 
+                        placeholder="https://..." 
+                        value={form.completion_social_link || ''} 
+                        onChange={e => updateField('completion_social_link', e.target.value)} 
+                        disabled={!form.completion_social_type}
+                      />
+                      {!isValidUrl(form.completion_social_link || '') && <p className="text-[10px] text-red-500 mt-1">Đường dẫn không hợp lệ</p>}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -628,7 +718,9 @@ function CourseModalConfigDialog({ courseId, open, onClose }: { courseId: string
               saveMut.isPending || 
               (form.welcome_enabled && (!form.welcome_title?.trim() || !form.welcome_description?.trim())) || 
               (form.confirm_enabled && (!form.confirm_title?.trim() || !form.confirm_description?.trim() || !form.confirm_checkbox_text?.trim())) || 
-              (form.completion_enabled && (!form.completion_title?.trim() || !form.completion_description?.trim()))
+              (form.completion_enabled && (!form.completion_title?.trim() || !form.completion_description?.trim())) ||
+              (form.completion_enabled && !!form.completion_social_type && !form.completion_social_link?.trim()) ||
+              (form.completion_enabled && !isValidUrl(form.completion_social_link || ''))
             }
           >
             {saveMut.isPending ? 'Đang lưu...' : 'Lưu cấu hình'}
