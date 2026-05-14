@@ -12,13 +12,31 @@ import {
   deleteBlock,
   publishBlock,
   renameBlock,
+  reorderChildren,
 } from '@/api/course-authoring';
 import {
   ChevronRight, ChevronDown, Plus, Trash2, Globe, EyeOff,
-  MoreVertical, Folder, Layout, FileText, Pencil, Check, X,
+  MoreVertical, Folder, Layout, FileText, Pencil, Check, X, GripVertical,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -45,6 +63,19 @@ export default function OutlineTree({ courseId, onSelectUnit, selectedUnitId }: 
     staleTime: 30_000,
   });
 
+  const reorderMut = useMutation({
+    mutationFn: ({ parentId, childIds }: { parentId: string; childIds: string[] }) => reorderChildren(parentId, childIds),
+    onSuccess: () => refetch(),
+    onError: () => {
+      toast.error('Thay đổi vị trí thất bại');
+      refetch();
+    },
+  });
+
+  const handleReorder = (parentId: string, childIds: string[]) => {
+    reorderMut.mutate({ parentId, childIds });
+  };
+
   const structure = outline?.course_structure;
 
   if (isLoading) {
@@ -67,16 +98,23 @@ export default function OutlineTree({ courseId, onSelectUnit, selectedUnitId }: 
 
   return (
     <div className="space-y-1">
-      {structure.child_info?.children?.map((section) => (
-        <SectionNode
-          key={section.id}
-          node={section}
-          courseId={courseId}
-          onSelectUnit={onSelectUnit}
-          selectedUnitId={selectedUnitId}
-          onStructureChange={() => refetch()}
-        />
-      ))}
+      <SortableList
+        items={structure.child_info?.children || []}
+        parentId={structure.id}
+        onReorder={handleReorder}
+      >
+        {(items) => items.map((section) => (
+          <SectionNode
+            key={section.id}
+            node={section}
+            courseId={courseId}
+            onSelectUnit={onSelectUnit}
+            selectedUnitId={selectedUnitId}
+            onStructureChange={() => refetch()}
+            onReorder={handleReorder}
+          />
+        ))}
+      </SortableList>
       <AddNodeButton
         parentId={structure.id}
         category="chapter"
@@ -88,15 +126,63 @@ export default function OutlineTree({ courseId, onSelectUnit, selectedUnitId }: 
 }
 
 // ─────────────────────────────────────────────
+// Sortable List Wrapper
+// ─────────────────────────────────────────────
+
+function SortableList({
+  items,
+  parentId,
+  onReorder,
+  children
+}: {
+  items: CourseIndexSection[];
+  parentId: string;
+  onReorder: (parentId: string, childIds: string[]) => void;
+  children: (items: CourseIndexSection[]) => React.ReactNode;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const [localItems, setLocalItems] = useState(items);
+  React.useEffect(() => setLocalItems(items), [items]);
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = localItems.findIndex((i) => i.id === active.id);
+      const newIndex = localItems.findIndex((i) => i.id === over.id);
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newArray = arrayMove(localItems, oldIndex, newIndex);
+        setLocalItems(newArray);
+        onReorder(parentId, newArray.map((i) => i.id));
+      }
+    }
+  }
+
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={localItems.map(i => i.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-0.5">
+          {children(localItems)}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
+// ─────────────────────────────────────────────
 // Section Node
 // ─────────────────────────────────────────────
 
-function SectionNode({ node, courseId, onSelectUnit, selectedUnitId, onStructureChange }: {
+function SectionNode({ node, courseId, onSelectUnit, selectedUnitId, onStructureChange, onReorder }: {
   node: CourseIndexSection;
   courseId: string;
   onSelectUnit: (id: string) => void;
   selectedUnitId: string | null;
   onStructureChange: () => void;
+  onReorder: (parentId: string, childIds: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -115,15 +201,22 @@ function SectionNode({ node, courseId, onSelectUnit, selectedUnitId, onStructure
       />
       {expanded && (
         <div className="ml-5 pl-2 border-l border-border/40 mt-0.5 space-y-0.5">
-          {node.child_info?.children?.map((sub) => (
-            <SubsectionNode
-              key={sub.id}
-              node={sub}
-              onSelectUnit={onSelectUnit}
-              selectedUnitId={selectedUnitId}
-              onStructureChange={onStructureChange}
-            />
-          ))}
+          <SortableList
+            items={node.child_info?.children || []}
+            parentId={node.id}
+            onReorder={onReorder}
+          >
+            {(items) => items.map((sub) => (
+              <SubsectionNode
+                key={sub.id}
+                node={sub}
+                onSelectUnit={onSelectUnit}
+                selectedUnitId={selectedUnitId}
+                onStructureChange={onStructureChange}
+                onReorder={onReorder}
+              />
+            ))}
+          </SortableList>
           <AddNodeButton
             parentId={node.id}
             category="sequential"
@@ -141,11 +234,12 @@ function SectionNode({ node, courseId, onSelectUnit, selectedUnitId, onStructure
 // Subsection Node
 // ─────────────────────────────────────────────
 
-function SubsectionNode({ node, onSelectUnit, selectedUnitId, onStructureChange }: {
+function SubsectionNode({ node, onSelectUnit, selectedUnitId, onStructureChange, onReorder }: {
   node: CourseIndexSection;
   onSelectUnit: (id: string) => void;
   selectedUnitId: string | null;
   onStructureChange: () => void;
+  onReorder: (parentId: string, childIds: string[]) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
@@ -163,15 +257,21 @@ function SubsectionNode({ node, onSelectUnit, selectedUnitId, onStructureChange 
       />
       {expanded && (
         <div className="ml-5 pl-2 border-l border-border/40 mt-0.5 space-y-0.5">
-          {node.child_info?.children?.map((unit) => (
-            <UnitNode
-              key={unit.id}
-              node={unit}
-              isSelected={selectedUnitId === unit.id}
-              onSelect={() => onSelectUnit(unit.id)}
-              onStructureChange={onStructureChange}
-            />
-          ))}
+          <SortableList
+            items={node.child_info?.children || []}
+            parentId={node.id}
+            onReorder={onReorder}
+          >
+            {(items) => items.map((unit) => (
+              <UnitNode
+                key={unit.id}
+                node={unit}
+                isSelected={selectedUnitId === unit.id}
+                onSelect={() => onSelectUnit(unit.id)}
+                onStructureChange={onStructureChange}
+              />
+            ))}
+          </SortableList>
           <AddNodeButton
             parentId={node.id}
             category="vertical"
@@ -227,6 +327,14 @@ function NodeRow({ node, courseId, depth, icon, expanded, onToggle, isSelectable
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(node.display_name);
 
+  // dnd-kit hook
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: node.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    ...(isDragging ? { zIndex: 50, position: 'relative' as const, opacity: 0.6 } : {})
+  };
+
   const renameMut = useMutation({
     mutationFn: () => renameBlock(node.id, renameValue),
     onSuccess: () => {
@@ -241,10 +349,23 @@ function NodeRow({ node, courseId, depth, icon, expanded, onToggle, isSelectable
 
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       className={`flex items-center group gap-1 py-1.5 px-2 rounded-md cursor-pointer text-sm transition-colors select-none
-        ${isSelected ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted/50 text-foreground/80'}`}
+        ${isSelected ? 'bg-primary/10 text-primary font-semibold' : 'hover:bg-muted/50 text-foreground/80'}
+        ${isDragging ? 'shadow-lg bg-background border border-border/50 ring-2 ring-primary/20' : ''}`}
       onClick={isRenaming ? undefined : onToggle}
     >
+      {/* Drag handle */}
+      <div 
+        {...attributes} 
+        {...listeners} 
+        className="shrink-0 flex justify-center cursor-grab hover:text-foreground text-muted-foreground/30 hover:bg-muted-foreground/10 rounded px-0.5 transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </div>
+
       {/* Expand chevron (only for non-unit) */}
       <div className="w-4 shrink-0 flex justify-center">
         {hasChildren ? (

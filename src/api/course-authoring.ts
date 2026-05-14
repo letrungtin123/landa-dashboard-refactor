@@ -226,6 +226,13 @@ export async function updateXBlock(
 export const updateBlock = updateXBlock;
 
 /**
+ * Thay đổi thứ tự các con của một block
+ */
+export async function reorderChildren(parentId: string, childIds: string[]): Promise<XBlockInfo> {
+  return updateXBlock(parentId, { children: childIds });
+}
+
+/**
  * Đổi tên block
  */
 export async function renameBlock(blockId: string, displayName: string): Promise<XBlockInfo> {
