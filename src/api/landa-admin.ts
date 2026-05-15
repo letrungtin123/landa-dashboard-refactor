@@ -418,3 +418,40 @@ export async function getAuditLogs(params: AuditLogsParams = {}): Promise<AuditL
   const { data } = await apiClient.get<AuditLogsResponse>(`${BASE}/audit-logs/`, { params: cleanParams });
   return data;
 }
+
+// ══════════════════════════════════════════════
+// Admin User Badges & Study Time API
+// ══════════════════════════════════════════════
+export interface AdminUserBadge {
+  badge_id: string;
+  earned_at: string;
+}
+
+export interface AdminUserBadgesResponse {
+  username: string;
+  badges: AdminUserBadge[];
+}
+
+export const getAdminUserBadges = async (username: string): Promise<AdminUserBadgesResponse> => {
+  const { data } = await apiClient.get<AdminUserBadgesResponse>(`${BASE}/user-badges/`, {
+    params: { username },
+  });
+  return data;
+};
+
+export interface StudyTimeEntry {
+  date: string;
+  minutes: number;
+}
+
+export interface AdminUserStudyTimeResponse {
+  username: string;
+  entries: StudyTimeEntry[];
+}
+
+export const getAdminUserStudyTime = async (username: string): Promise<AdminUserStudyTimeResponse> => {
+  const { data } = await apiClient.get<AdminUserStudyTimeResponse>(`${BASE}/user-study-time/`, {
+    params: { username },
+  });
+  return data;
+};
