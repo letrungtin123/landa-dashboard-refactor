@@ -15,6 +15,7 @@ export type DiagramNodeData = {
   textColor: string;
   tooltip?: string;
   target_diagram_id?: string;
+  hidePorts?: boolean;
 };
 
 export default function CustomShapeNode({ data, selected }: NodeProps) {
@@ -39,10 +40,10 @@ export default function CustomShapeNode({ data, selected }: NodeProps) {
         type="source" 
         position={Position.Top} 
         id="top" 
-        className="!w-[calc(100%+16px)] !h-5 !opacity-100 !bg-transparent !border-none !rounded-none flex items-center justify-center -translate-y-2.5 z-10" 
-        style={{ top: -8 }}
+        className="!w-2 !h-2 !opacity-100 !bg-transparent !border-none !rounded-none z-10" 
+        style={{ top: 0, transform: 'translate(-50%, -50%)' }}
       >
-        <div className="w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm" />
+        {!nodeData.hidePorts && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm cursor-crosshair" />}
       </Handle>
 
       {/* Left Handle */}
@@ -50,10 +51,10 @@ export default function CustomShapeNode({ data, selected }: NodeProps) {
         type="source" 
         position={Position.Left} 
         id="left" 
-        className="!h-[calc(100%+16px)] !w-5 !opacity-100 !bg-transparent !border-none !rounded-none flex items-center justify-center -translate-x-2.5 z-10" 
-        style={{ left: -8 }}
+        className="!w-2 !h-2 !opacity-100 !bg-transparent !border-none !rounded-none z-10" 
+        style={{ left: 0, transform: 'translate(-50%, -50%)' }}
       >
-        <div className="w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm" />
+        {!nodeData.hidePorts && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm cursor-crosshair" />}
       </Handle>
 
       <div className="text-sm font-semibold text-center whitespace-pre-wrap flex items-center gap-1 z-20 relative pointer-events-none">
@@ -66,10 +67,10 @@ export default function CustomShapeNode({ data, selected }: NodeProps) {
         type="source" 
         position={Position.Bottom} 
         id="bottom" 
-        className="!w-[calc(100%+16px)] !h-5 !opacity-100 !bg-transparent !border-none !rounded-none flex items-center justify-center translate-y-2.5 z-10" 
-        style={{ bottom: -8 }}
+        className="!w-2 !h-2 !opacity-100 !bg-transparent !border-none !rounded-none z-10" 
+        style={{ bottom: 0, transform: 'translate(-50%, 50%)' }}
       >
-        <div className="w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm" />
+        {!nodeData.hidePorts && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm cursor-crosshair" />}
       </Handle>
 
       {/* Right Handle */}
@@ -77,10 +78,10 @@ export default function CustomShapeNode({ data, selected }: NodeProps) {
         type="source" 
         position={Position.Right} 
         id="right" 
-        className="!h-[calc(100%+16px)] !w-5 !opacity-100 !bg-transparent !border-none !rounded-none flex items-center justify-center translate-x-2.5 z-10" 
-        style={{ right: -8 }}
+        className="!w-2 !h-2 !opacity-100 !bg-transparent !border-none !rounded-none z-10" 
+        style={{ right: 0, transform: 'translate(50%, -50%)' }}
       >
-        <div className="w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm" />
+        {!nodeData.hidePorts && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full bg-primary/40 opacity-0 group-hover:opacity-100 hover:!bg-primary hover:!scale-150 transition-all shadow-sm cursor-crosshair" />}
       </Handle>
     </div>
   );

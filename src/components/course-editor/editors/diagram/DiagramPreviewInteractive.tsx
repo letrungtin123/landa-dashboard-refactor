@@ -1,13 +1,15 @@
 import React, { useState } from 'react';
-import { ReactFlow, MiniMap, Controls, Background, Node, useNodesState, useEdgesState } from '@xyflow/react';
+import { ReactFlow, MiniMap, Controls, Background, Node, useNodesState, useEdgesState, ConnectionMode } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 import CustomShapeNode, { type DiagramNodeData } from './CustomShapeNode';
+import JunctionNode from './JunctionNode';
 import { useTheme } from 'next-themes';
 
 const nodeTypes = {
   customShape: CustomShapeNode,
+  junction: JunctionNode,
 };
 
 export interface Diagram {
@@ -61,11 +63,13 @@ export default function DiagramPreviewInteractive({ data }: DiagramPreviewIntera
     draggable: false,
     selectable: false,
     connectable: false,
+    data: { ...n.data, hidePorts: true },
   }));
 
   const initialEdges = activeDiagram.edges.map((e) => ({
     ...e,
-    animated: true,
+    animated: false,
+    type: 'step',
   }));
 
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -78,10 +82,12 @@ export default function DiagramPreviewInteractive({ data }: DiagramPreviewIntera
       draggable: false,
       selectable: false,
       connectable: false,
+      data: { ...n.data, hidePorts: true },
     })));
     setEdges(activeDiagram.edges.map((e) => ({
       ...e,
-      animated: true,
+      animated: false,
+      type: 'step',
     })));
   }, [activeDiagram, setNodes, setEdges]);
 
@@ -106,6 +112,7 @@ export default function DiagramPreviewInteractive({ data }: DiagramPreviewIntera
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
           nodeTypes={nodeTypes}
+          connectionMode={ConnectionMode.Loose}
           onNodeClick={handleNodeClick}
           fitView
           nodesDraggable={false}
