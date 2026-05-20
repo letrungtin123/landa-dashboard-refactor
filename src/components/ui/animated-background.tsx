@@ -483,7 +483,7 @@ function GlobeSVG({ nodes, arcs, reducedMotion }: {
 // ─── Main Component ─────────────────────────────────────────────────────
 export function AnimatedBackground() {
   const [mounted, setMounted] = useState(false);
-  const reducedMotion = useReducedMotion() || false;
+  const reducedMotion = false; // Forced to false to ensure animations run on all Chrome profiles
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Mouse parallax
